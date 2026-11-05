@@ -206,7 +206,7 @@ function App() {
                 <h1>Good morning, Sakshi <span className="wave">✦</span></h1>
                 <p className="welcome-sub">Tell us what you need. We’ll help you find a clinic and a time that works.</p>
               </div>
-              <div className="care-note"><ShieldCheck size={17} /><span>Verified clinic profiles</span></div>
+              <div className="care-note"><ShieldCheck size={17} /><span>Sample clinic directory</span></div>
             </section>
 
             <section className="search-panel" aria-label="Clinic search">
@@ -272,7 +272,7 @@ function ClinicCard({ clinic, onBook }) {
         <p className="clinic-description">{clinic.description}</p>
         <div className="clinic-meta"><span><Clock3 size={14} /> {clinic.openingLabel}</span><span className="service-label"><Stethoscope size={14} /> {clinic.services.join(' · ')}</span></div>
         <div className="slot-row"><strong>Available times</strong><div className="slot-list">{clinic.slots.length ? clinic.slots.slice(0, 3).map((slot) => <button key={slot.time} onClick={() => onBook(clinic, slot.time)}>{slot.time}</button>) : <span className="no-slots">No slots on this day</span>}</div></div>
-        <button className="view-clinic" onClick={() => clinic.slots[0] && onBook(clinic, clinic.slots[0].time)}>View clinic <ArrowRight size={15} /></button>
+        <button className="view-clinic" onClick={() => clinic.slots[0] && onBook(clinic, clinic.slots[0].time)}>Book first available <ArrowRight size={15} /></button>
       </div>
     </article>
   )
