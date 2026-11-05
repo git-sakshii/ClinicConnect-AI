@@ -5,6 +5,7 @@ import express from 'express'
 import { MongoClient } from 'mongodb'
 
 const PORT = Number(process.env.PORT || 3001)
+const NOMINATIM_URL = process.env.NOMINATIM_URL || 'https://nominatim.openstreetmap.org/search'
 const app = express()
 app.disable('x-powered-by')
 app.use(cors({ origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173' }))
@@ -38,6 +39,16 @@ const seedClinics = [
 ]
 
 const memory = { clinics: seedClinics, appointments: [], reservedSlots: new Set() }
+const osmCache = new Map()
+const osmInflight = new Map()
+const areaBounds = {
+  Indiranagar: { south: 12.955, west: 77.625, north: 13.01, east: 77.67 },
+  Koramangala: { south: 12.91, west: 77.60, north: 12.96, east: 77.65 },
+  Whitefield: { south: 12.94, west: 77.72, north: 13.04, east: 77.80 },
+  'Any area': { south: 12.84, west: 77.50, north: 13.15, east: 77.82 },
+}
+let nominatimQueue = Promise.resolve()
+let nominatimLastRequest = 0
 let client
 let db
 let mode = 'demo-memory'
@@ -66,13 +77,85 @@ async function getClinics() {
   return db.collection('clinics').find({ active: { $ne: false } }).toArray()
 }
 
+function osmService(tags) {
+  const value = `${tags.amenity || ''} ${tags.healthcare || ''} ${tags['healthcare:speciality'] || ''} ${tags.name || ''}`.toLowerCase()
+  if (/dent|orthodont/.test(value)) return 'Dentistry'
+  if (/(^|[^a-z])(ear|nose|throat|hearing|ent)([^a-z]|$)|otolaryng/.test(value)) return 'ENT'
+  if (/dermat|skin/.test(value)) return 'Dermatology'
+  return 'Clinic'
+}
+
+async function findOsmClinics(area, service) {
+  // Send only generic provider/category and area terms upstream, never the user's free-text concern.
+  const terms = { Dentistry: 'dentist', ENT: 'ENT doctor', Dermatology: 'dermatologist', 'General medicine': 'doctor' }
+  const prompt = [service === 'All services' || !service ? 'clinic' : (terms[service] || service), area === 'Any area' ? 'Bengaluru' : area, 'Bengaluru'].join(' ').trim().replace(/\s+/g, ' ')
+  const key = prompt.toLowerCase()
+  const cached = osmCache.get(key)
+  if (cached && cached.expiresAt > Date.now()) return cached.clinics
+  if (osmInflight.has(key)) return osmInflight.get(key)
+  const bounds = areaBounds[area] || areaBounds['Any area']
+  const params = new URLSearchParams({ q: prompt, format: 'jsonv2', addressdetails: '1', limit: '30', viewbox: `${bounds.west},${bounds.north},${bounds.east},${bounds.south}`, bounded: '1' })
+  const performLookup = async () => {
+    const wait = Math.max(0, 1100 - (Date.now() - nominatimLastRequest))
+    if (wait) await new Promise((resolve) => setTimeout(resolve, wait))
+    nominatimLastRequest = Date.now()
+    const upstream = await fetch(`${NOMINATIM_URL}?${params}`, {
+      headers: { 'user-agent': 'ClinicConnectStudentPrototype/0.2 (+https://github.com/git-sakshii/ClinicConnect-AI)', accept: 'application/json' },
+      signal: AbortSignal.timeout(20000),
+    })
+    if (!upstream.ok) throw Object.assign(new Error(`OpenStreetMap lookup returned ${upstream.status}`), { statusCode: 502 })
+    return upstream.json()
+  }
+  const pending = nominatimQueue.then(performLookup)
+  nominatimQueue = pending.then(() => undefined, () => undefined)
+  const result = pending.then((payload) => {
+    const clinics = payload.map((place) => {
+    const kind = `${place.category}/${place.type}`.toLowerCase()
+    if (!['amenity/clinic', 'amenity/doctors', 'amenity/dentist', 'amenity/hospital', 'healthcare/clinic', 'healthcare/doctor', 'healthcare/dentist'].includes(kind) || !place.name) return null
+    const placeName = place.name.toLowerCase()
+    const matchesService = service === 'All services'
+      || (service === 'Dentistry' && (place.type === 'dentist' || /dent|orthodont/.test(placeName)))
+      || (service === 'ENT' && /(^|[^a-z])(ear|nose|throat|ent)([^a-z]|$)|otolaryng/.test(placeName))
+      || (service === 'Dermatology' && /dermat|skin/.test(placeName))
+      || (service === 'General medicine' && ['doctor', 'doctors'].includes(place.type))
+      || (service === 'Clinic' && ['clinic', 'hospital'].includes(place.type))
+    if (!matchesService) return null
+    const address = place.address || {}
+    const neighborhood = address.suburb || address.neighbourhood || address.city_district || address.city || area.replace('Any area', 'Bengaluru')
+    const category = service !== 'All services' ? service : osmService({ amenity: place.type, name: place.name })
+    const lat = Number(place.lat)
+    const lon = Number(place.lon)
+    if (lat < bounds.south || lat > bounds.north || lon < bounds.west || lon > bounds.east) return null
+    const shortAddress = [address.house_number, address.road, address.neighbourhood || address.suburb, address.city || address.town].filter(Boolean).join(', ')
+    return {
+      id: `osm-${place.osm_type}-${place.osm_id}`, name: place.name, area: neighborhood,
+      address: shortAddress || place.display_name,
+      services: [category], languages: [], openingLabel: 'Hours not verified',
+      description: 'Public OpenStreetMap result. Verify details and availability with the provider before visiting.',
+      accent: 'teal', artLabel: category.toUpperCase(), slots: [], source: 'OpenStreetMap',
+      osmUrl: `https://www.openstreetmap.org/${place.osm_type}/${place.osm_id}`,
+      mapsUrl: `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=18/${lat}/${lon}`,
+      website: null, phone: null,
+    }
+    }).filter(Boolean)
+    osmCache.set(key, { clinics, expiresAt: Date.now() + 60 * 60 * 1000 })
+    return clinics
+  })
+  osmInflight.set(key, result)
+  try { return await result } finally { osmInflight.delete(key) }
+}
+
 app.get('/api/health', (_request, response) => {
   response.json({ status: 'ok', mode, timestamp: new Date().toISOString() })
 })
 
 app.get('/api/clinics', async (request, response, next) => {
   try {
-    const { search = '', area = '', service = '', date = new Date().toISOString().slice(0, 10) } = request.query
+    const { search = '', area = '', service = '', source = 'demo', date = new Date().toISOString().slice(0, 10) } = request.query
+    if (source === 'osm') {
+      const clinics = await findOsmClinics(String(area || 'Any area'), String(service || 'All services'))
+      return response.json({ clinics, source: 'OpenStreetMap', fetchedAt: new Date().toISOString(), attribution: '© OpenStreetMap contributors' })
+    }
     let clinics = await getClinics()
     const term = String(search).trim().toLowerCase()
     const targetArea = String(area).trim().toLowerCase()
@@ -93,22 +176,25 @@ app.post('/api/assistant/interpret', (request, response) => {
 
   const text = message.toLowerCase()
   const mappings = [
-    { keys: ['ear', 'nose', 'throat', 'hearing'], service: 'ENT', label: 'ear, nose or throat concern' },
-    { keys: ['tooth', 'teeth', 'dent', 'gum'], service: 'Dentistry', label: 'dental appointment' },
-    { keys: ['skin', 'rash', 'acne', 'hair'], service: 'Dermatology', label: 'skin or hair appointment' },
-    { keys: ['general doctor', 'general medicine', 'check-up', 'checkup'], service: 'General medicine', label: 'general consultation' },
+    { keys: ['ear', 'nose', 'throat', 'hearing', 'ಕಿವಿ', 'ಮೂಗು', 'ಗಂಟಲು', 'ಕಿವಿನೋವು'], service: 'ENT', label: 'ear, nose or throat concern' },
+    { keys: ['tooth', 'teeth', 'dent', 'gum', 'ಹಲ್ಲು', 'ದಂತ', 'ಹಲ್ಲುನೋವು'], service: 'Dentistry', label: 'dental appointment' },
+    { keys: ['skin', 'rash', 'acne', 'hair', 'ಚರ್ಮ', 'ದದ್ದು', 'ಮೊಡವೆ'], service: 'Dermatology', label: 'skin or hair appointment' },
+    { keys: ['general doctor', 'general medicine', 'check-up', 'checkup', 'ಸಾಮಾನ್ಯ ವೈದ್ಯ'], service: 'General medicine', label: 'general consultation' },
   ]
   const match = mappings.find((item) => item.keys.some((key) => text.includes(key)))
-  const dateMentioned = /\b(today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i.test(text)
-  const timeMentioned = /\b(morning|afternoon|evening|\d{1,2}(:\d{2})?\s?(am|pm))\b/i.test(text)
+  const dateMentioned = /\b(today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i.test(text) || /ಇಂದು|ನಾಳೆ|ಸೋಮವಾರ|ಮಂಗಳವಾರ|ಬುಧವಾರ|ಗುರುವಾರ|ಶುಕ್ರವಾರ|ಶನಿವಾರ|ಭಾನುವಾರ/.test(text)
+  const timeMentioned = /\b(morning|afternoon|evening|\d{1,2}(:\d{2})?\s?(am|pm))\b/i.test(text) || /ಬೆಳಗ್ಗೆ|ಮಧ್ಯಾಹ್ನ|ಸಂಜೆ/.test(text)
+  const kannada = request.body?.language === 'kn'
   response.json({
     source: 'demo-rules',
     suggestedService: match?.service || null,
     area: /koramangala/i.test(text) ? 'Koramangala' : /indiranagar/i.test(text) ? 'Indiranagar' : null,
     missing: [!dateMentioned && 'date', !timeMentioned && 'time'].filter(Boolean),
-    message: match
-      ? `I found wording that may match a ${match.label}. I can show clinics that list ${match.service}; please confirm that this is the service you want to book.`
-      : 'I could not safely match that wording to a sample service. Try a clinic-listed service or use the search filters.',
+    message: kannada
+      ? (match ? `ನಿಮ್ಮ ವಿವರಣೆಗೆ ${match.service} ಸೇವೆ ಹೊಂದಿರಬಹುದು. ಮುಂದುವರಿಯುವ ಮೊದಲು ಈ ಸೇವೆಯನ್ನು ದೃಢೀಕರಿಸಿ.` : 'ಈ ವಿವರಣೆಗೆ ಸರಿಯಾದ ಸೇವೆಯನ್ನು ಖಚಿತಪಡಿಸಲು ಸಾಧ್ಯವಾಗಲಿಲ್ಲ. ಸೇವೆಯ ಹೆಸರನ್ನು ಪ್ರಯತ್ನಿಸಿ ಅಥವಾ ಕ್ಲಿನಿಕ್ ಹುಡುಕಾಟ ಬಳಸಿ.')
+      : match
+        ? `I found wording that may match a ${match.label}. I can show clinics that list ${match.service}; please confirm that this is the service you want to book.`
+        : 'I could not safely match that wording to a sample service. Try a clinic-listed service or use the search filters.',
   })
 })
 

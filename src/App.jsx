@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   Activity, ArrowDownLeft, ArrowRight, ArrowUpRight, AudioLines, CalendarDays,
   Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, HeartPulse, Languages,
-  MapPin, MessageCircle, Search, ShieldCheck, Sparkles, Stethoscope, UserRound,
+  MapPin, MessageCircle, Mic, Search, ShieldCheck, Sparkles, Stethoscope, UserRound,
   X,
 } from 'lucide-react'
 import './App.css'
@@ -29,8 +29,14 @@ function App() {
   const [selectedDay, setSelectedDay] = useState(nextDays()[0].key)
   const [query, setQuery] = useState('')
   const [area, setArea] = useState('Indiranagar')
+  const [directorySource, setDirectorySource] = useState('osm')
+  const [liveSearch, setLiveSearch] = useState(null)
+  const [savedClinics, setSavedClinics] = useState(() => new Set(JSON.parse(localStorage.getItem('clinicconnect:saved') || '[]')))
+  const [directoryError, setDirectoryError] = useState('')
   const [service, setService] = useState('All services')
   const [assistantText, setAssistantText] = useState('')
+  const [language, setLanguage] = useState('en')
+  const [isListening, setIsListening] = useState(false)
   const [assistantResult, setAssistantResult] = useState(null)
   const [isThinking, setIsThinking] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
@@ -41,30 +47,56 @@ function App() {
   const [bookingState, setBookingState] = useState('idle')
   const [toast, setToast] = useState('')
   const days = useMemo(() => nextDays(), [])
+  const displayedClinics = useMemo(() => {
+    if (directorySource !== 'osm' || !query.trim()) return clinics
+    const term = query.trim().toLowerCase()
+    return clinics.filter((clinic) => `${clinic.name} ${clinic.area} ${clinic.address} ${clinic.services.join(' ')}`.toLowerCase().includes(term))
+  }, [clinics, directorySource, query])
 
   useEffect(() => {
+    if (directorySource !== 'demo') return undefined
     let current = true
     async function load() {
       const params = new URLSearchParams()
       if (query) params.set('search', query)
       if (area) params.set('area', area)
       if (service !== 'All services') params.set('service', service)
+      params.set('source', 'demo')
       params.set('date', selectedDay)
       try {
         const response = await fetch(`/api/clinics?${params}`)
         if (!response.ok) throw new Error('Could not load clinics')
         const data = await response.json()
-        if (current) setClinics(data.clinics)
+        if (current) { setClinics(data.clinics); setDirectoryError('') }
       } catch {
         if (current) {
           setClinics([])
-          setToast('The clinic service is unavailable. Start the API server and retry.')
+          setDirectoryError(directorySource === 'osm' ? 'The live OpenStreetMap lookup is temporarily unavailable. Retry in a moment or switch to sample listings.' : 'The clinic service is unavailable. Start the API server and retry.')
         }
       }
     }
     void load()
     return () => { current = false }
-  }, [query, area, service, selectedDay, refreshKey])
+  }, [query, area, service, selectedDay, refreshKey, directorySource])
+
+  useEffect(() => {
+    if (directorySource !== 'osm' || !liveSearch) return undefined
+    let current = true
+    async function load() {
+      const params = new URLSearchParams({ source: 'osm', area: liveSearch.area, search: liveSearch.query })
+      if (liveSearch.service !== 'All services') params.set('service', liveSearch.service)
+      try {
+        const response = await fetch(`/api/clinics?${params}`)
+        const data = await response.json()
+        if (!response.ok) throw new Error(data.error || 'Live listings could not be loaded')
+        if (current) { setClinics(data.clinics); setDirectoryError('') }
+      } catch {
+        if (current) { setClinics([]); setDirectoryError('The live OpenStreetMap lookup is temporarily unavailable. Retry in a moment or switch to sample listings.') }
+      }
+    }
+    void load()
+    return () => { current = false }
+  }, [directorySource, liveSearch])
 
   useEffect(() => {
     let current = true
@@ -95,7 +127,7 @@ function App() {
     try {
       const response = await fetch('/api/assistant/interpret', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: clean, language: 'en' }),
+        body: JSON.stringify({ message: clean, language }),
       })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || 'Assistant is unavailable')
@@ -107,6 +139,20 @@ function App() {
     } finally {
       setIsThinking(false)
     }
+  }
+
+  function listenForRequest() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+    if (!SpeechRecognition) { setToast('Voice input is not available in this browser. Try Chrome or type your request.'); return }
+    const recognition = new SpeechRecognition()
+    recognition.lang = language === 'kn' ? 'kn-IN' : 'en-IN'
+    recognition.interimResults = false
+    recognition.maxAlternatives = 1
+    recognition.onstart = () => setIsListening(true)
+    recognition.onresult = (event) => setAssistantText(event.results[0][0].transcript)
+    recognition.onerror = () => { setIsListening(false); setToast('Voice input could not start. Check browser microphone permission or type your request.') }
+    recognition.onend = () => setIsListening(false)
+    recognition.start()
   }
 
   function openBooking(clinic, slot) {
@@ -192,8 +238,8 @@ function App() {
         <header className="topbar">
           <div className="breadcrumb">Patient workspace <span>/</span> <strong>{navigation.find((item) => item.id === activeView)?.label}</strong></div>
           <div className="top-actions">
-            <span className="demo-pill"><span /> DEMO DATA</span>
-            <button className="language-button" onClick={() => setToast('English is enabled. The pilot language will be selected during setup.')}><Languages size={16} /> English <ChevronDown size={14} /></button>
+            <span className={`demo-pill ${directorySource === 'osm' ? 'live-pill' : ''}`}><span /> {directorySource === 'osm' ? 'OPENSTREETMAP' : 'SAMPLE DATA'}</span>
+            <button className="language-button" onClick={() => setLanguage((current) => current === 'en' ? 'kn' : 'en')} aria-label="Switch voice language"><Languages size={16} /> {language === 'en' ? 'English' : 'ಕನ್ನಡ'} <ChevronDown size={14} /></button>
             <button className="top-avatar" aria-label="User profile">SS</button>
           </div>
         </header>
@@ -206,33 +252,38 @@ function App() {
                 <h1>Good morning, Sakshi <span className="wave">✦</span></h1>
                 <p className="welcome-sub">Tell us what you need. We’ll help you find a clinic and a time that works.</p>
               </div>
-              <div className="care-note"><ShieldCheck size={17} /><span>Sample clinic directory</span></div>
+                <div className="care-note"><ShieldCheck size={17} /><span>{directorySource === 'osm' ? 'Live public directory' : 'Sample directory'}</span></div>
             </section>
 
             <section className="search-panel" aria-label="Clinic search">
-              <label className="search-input-wrap"><Search size={19} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search a clinic, service, or concern" /></label>
+              <label className="search-input-wrap"><Search size={19} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={directorySource === 'osm' ? 'Filter by clinic name' : 'Search a clinic, service, or concern'} /></label>
               <span className="search-divider" />
               <label className="search-select"><MapPin size={18} /><select value={area} onChange={(event) => setArea(event.target.value)}><option>Indiranagar</option><option>Koramangala</option><option>Whitefield</option><option>Any area</option></select><ChevronDown size={14} /></label>
-              <button className="search-submit" onClick={() => setRefreshKey((value) => value + 1)}>Search clinics <ArrowRight size={16} /></button>
+              <button className="search-submit" onClick={() => directorySource === 'osm' ? setLiveSearch({ query, area, service, requestedAt: Date.now() }) : setRefreshKey((value) => value + 1)}>Search clinics <ArrowRight size={16} /></button>
             </section>
 
             <div className="content-grid">
               <section className="results-column">
                 <div className="section-head">
-                  <div><h2>Clinics around you</h2><p>Sample profiles · availability shown for your selected day</p></div>
-                  <label className="service-filter"><span className="sr-only">Filter by service</span><select value={service} onChange={(event) => setService(event.target.value)}><option>All services</option><option>Dentistry</option><option>ENT</option><option>Dermatology</option><option>General medicine</option></select><ChevronDown size={14} /></label>
+                  <div><h2>Clinics around you</h2><p>{directorySource === 'osm' ? 'OpenStreetMap listings · contact clinics to confirm details and appointments' : 'Sample profiles · availability shown for your selected day'}</p></div>
+                  <label className="service-filter"><span className="sr-only">Filter by service</span><select value={service} onChange={(event) => setService(event.target.value)}><option>All services</option><option>Dentistry</option><option>ENT</option><option>Dermatology</option><option>General medicine</option><option>Clinic</option></select><ChevronDown size={14} /></label>
                 </div>
-                <div className="date-strip" aria-label="Choose appointment day">
+                <div className="directory-toolbar">
+                  <label>Directory <select value={directorySource} onChange={(event) => { setDirectorySource(event.target.value); setClinics([]); setDirectoryError(''); setLiveSearch(null) }}><option value="osm">Live OpenStreetMap data</option><option value="demo">Sample prototype data</option></select></label>
+                  <span>{savedClinics.size} saved</span>
+                </div>
+                {directoryError && <div className="directory-alert" role="status">{directoryError}</div>}
+                {directorySource === 'demo' && <div className="date-strip" aria-label="Choose appointment day">
                   <button className="date-arrow" aria-label="Previous dates" onClick={() => setSelectedDay(days[0].key)}><ChevronLeft size={17} /></button>
                   {days.slice(0, 5).map((day) => <button key={day.key} className={`date-chip ${selectedDay === day.key ? 'selected' : ''}`} onClick={() => setSelectedDay(day.key)}><strong>{day.label}</strong>{day.sub && <span>{day.sub}</span>}</button>)}
                   <button className="date-arrow" aria-label="More dates" onClick={() => setSelectedDay(days[6].key)}><ChevronRight size={17} /></button>
-                </div>
+                </div>}
 
                 <div className="clinic-list">
-                  {clinics.map((clinic) => <ClinicCard key={clinic.id} clinic={clinic} onBook={openBooking} />)}
-                  {clinics.length === 0 && <div className="empty-state"><Search size={22} /><strong>No matching clinics yet</strong><span>Try another service or nearby area. This demo includes sample profiles.</span></div>}
+                  {displayedClinics.map((clinic) => <ClinicCard key={clinic.id} clinic={clinic} onBook={openBooking} saved={savedClinics.has(clinic.id)} onSave={() => setSavedClinics((current) => { const next = new Set(current); if (next.has(clinic.id)) { next.delete(clinic.id) } else { next.add(clinic.id) } localStorage.setItem('clinicconnect:saved', JSON.stringify([...next])); return next })} />)}
+                  {displayedClinics.length === 0 && <div className="empty-state"><Search size={22} /><strong>{directoryError ? 'Live listings could not be loaded' : directorySource === 'osm' && !liveSearch ? 'Search OpenStreetMap listings' : 'No matching clinics yet'}</strong><span>{directoryError ? directoryError : 'Try a clinic or speciality in Indiranagar, Koramangala or Whitefield. Public map data may have gaps.'}</span></div>}
                 </div>
-                <div className="safety-note"><ShieldCheck size={16} /><span>ClinicConnect helps with appointment booking. It does not diagnose or provide treatment advice.</span></div>
+                <div className="safety-note"><ShieldCheck size={16} /><span>{directorySource === 'osm' ? <>Listing details © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a>. Listings can be incomplete; verify with providers directly. ClinicConnect does not diagnose or provide treatment advice.</> : 'ClinicConnect helps with appointment booking. It does not diagnose or provide treatment advice.'}</span></div>
               </section>
 
               <aside className="assistant-column">
@@ -243,8 +294,8 @@ function App() {
                   {assistantResult && <div className="assistant-response"><span className="response-label">{assistantResult.source === 'demo-rules' ? 'BOOKING SUGGESTION' : 'ASSISTANT'}</span><p>{assistantResult.message}</p>{assistantResult.suggestedService && <div className="suggested-service"><Stethoscope size={15} /><span>Suggested service</span><strong>{assistantResult.suggestedService}</strong><button onClick={() => { setService(assistantResult.suggestedService); setAssistantResult({ ...assistantResult, message: `Showing clinic profiles that list ${assistantResult.suggestedService}. Please confirm this service matches what you want to book.` }) }}>Use this</button></div>}</div>}
                   <div className="prompt-label">TRY ASKING</div>
                   <div className="quick-prompts">{quickPrompts.map((prompt) => <button key={prompt} onClick={() => askAssistant(prompt)}>{prompt}<ArrowUpRight size={13} /></button>)}</div>
-                  <div className="assistant-compose"><textarea value={assistantText} onChange={(event) => setAssistantText(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); askAssistant() } }} placeholder="Describe what you’re looking for…" rows={2} aria-label="Describe what you need" /><div className="compose-actions"><span><AudioLines size={15} /> Voice notes on WhatsApp are planned</span><button disabled={isThinking || !assistantText.trim()} onClick={() => askAssistant()} aria-label="Send message">{isThinking ? <span className="spinner" /> : <ArrowRight size={17} />}</button></div></div>
-                  <div className="assistant-disclaimer">Demo matching uses service keywords. No AI provider is connected yet.</div>
+                  <div className="assistant-compose"><textarea value={assistantText} onChange={(event) => setAssistantText(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); askAssistant() } }} placeholder={language === 'kn' ? 'ನಿಮಗೆ ಏನು ಬೇಕು ಎಂದು ಹೇಳಿ…' : 'Describe what you’re looking for…'} rows={2} aria-label="Describe what you need" /><div className="compose-actions"><span><AudioLines size={15} /> {isListening ? 'Listening…' : `Voice input · ${language === 'en' ? 'English' : 'ಕನ್ನಡ'}`}</span><button className="voice-button" onClick={listenForRequest} disabled={isListening} aria-label="Speak your request"><Mic size={16} /></button><button disabled={isThinking || !assistantText.trim()} onClick={() => askAssistant()} aria-label="Send message">{isThinking ? <span className="spinner" /> : <ArrowRight size={17} />}</button></div></div>
+                  <div className="assistant-disclaimer">Keyword-based demo matching (not diagnosis). Voice audio is handled by your browser speech service; it is not stored by this app.</div>
                 </div>
                 <div className="whatsapp-card"><div className="whatsapp-badge"><MessageCircle size={18} /></div><div><strong>Prefer to talk?</strong><span>WhatsApp voice booking is on our roadmap.</span></div><ArrowRight size={16} /></div>
               </aside>
@@ -262,17 +313,16 @@ function App() {
   )
 }
 
-function ClinicCard({ clinic, onBook }) {
+function ClinicCard({ clinic, onBook, saved, onSave }) {
   const Icon = iconMap[clinic.services[0]] || Stethoscope
   return (
     <article className="clinic-card">
       <div className={`clinic-art art-${clinic.accent}`}><div className="art-orbit orbit-one" /><div className="art-orbit orbit-two" /><div className="clinic-art-icon"><Icon size={27} /></div><span className="art-label">{clinic.artLabel}</span></div>
       <div className="clinic-details">
-        <div className="clinic-title-row"><div><div className="clinic-tags"><span className="verified"><ShieldCheck size={12} /> SAMPLE PROFILE</span>{clinic.languages?.map((language) => <span key={language} className="language-tag">{language}</span>)}</div><h3>{clinic.name}</h3><p className="clinic-location"><MapPin size={14} /> {clinic.area} <span>·</span> {clinic.address}</p></div><button className="favorite-button" aria-label={`Save ${clinic.name}`} onClick={(event) => event.currentTarget.classList.toggle('saved')}>♡</button></div>
+        <div className="clinic-title-row"><div><div className="clinic-tags"><span className="verified"><ShieldCheck size={12} /> {clinic.source === 'OpenStreetMap' ? 'OSM LISTING' : 'SAMPLE PROFILE'}</span>{clinic.languages?.map((language) => <span key={language} className="language-tag">{language}</span>)}</div><h3>{clinic.name}</h3><p className="clinic-location"><MapPin size={14} /> {clinic.area} <span>·</span> {clinic.address}</p></div><button className={`favorite-button ${saved ? 'saved' : ''}`} aria-label={`${saved ? 'Unsave' : 'Save'} ${clinic.name}`} onClick={onSave}>{saved ? '♥' : '♡'}</button></div>
         <p className="clinic-description">{clinic.description}</p>
         <div className="clinic-meta"><span><Clock3 size={14} /> {clinic.openingLabel}</span><span className="service-label"><Stethoscope size={14} /> {clinic.services.join(' · ')}</span></div>
-        <div className="slot-row"><strong>Available times</strong><div className="slot-list">{clinic.slots.length ? clinic.slots.slice(0, 3).map((slot) => <button key={slot.time} onClick={() => onBook(clinic, slot.time)}>{slot.time}</button>) : <span className="no-slots">No slots on this day</span>}</div></div>
-        <button className="view-clinic" onClick={() => clinic.slots[0] && onBook(clinic, clinic.slots[0].time)}>Book first available <ArrowRight size={15} /></button>
+        {clinic.source === 'OpenStreetMap' ? <div className="real-data-actions">{clinic.phone && <a href={`tel:${clinic.phone}`}><MessageCircle size={13} /> {clinic.phone}</a>}{clinic.website && <a href={clinic.website} target="_blank" rel="noreferrer">Website <ArrowUpRight size={13} /></a>}<a href={clinic.mapsUrl} target="_blank" rel="noreferrer"><MapPin size={13} /> Directions</a></div> : <><div className="slot-row"><strong>Available times</strong><div className="slot-list">{clinic.slots.length ? clinic.slots.slice(0, 3).map((slot) => <button key={slot.time} onClick={() => onBook(clinic, slot.time)}>{slot.time}</button>) : <span className="no-slots">No slots on this day</span>}</div></div><button className="view-clinic" onClick={() => clinic.slots[0] && onBook(clinic, clinic.slots[0].time)}>Book first available <ArrowRight size={15} /></button></>}
       </div>
     </article>
   )

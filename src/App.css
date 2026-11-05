@@ -32,6 +32,7 @@
 .top-actions { display: flex; align-items: center; gap: 17px; }
 .demo-pill { display: inline-flex; align-items: center; gap: 6px; color: #8897a3; font-size: 9px; font-weight: 800; letter-spacing: .65px; }
 .demo-pill span { width: 6px; height: 6px; border-radius: 50%; background: #e3ae56; }
+.demo-pill.live-pill span { background: #35ac77; box-shadow: 0 0 0 3px #35ac771c; }
 .language-button { display: inline-flex; align-items: center; gap: 7px; padding: 7px 10px; border: 1px solid #e5ebf0; border-radius: 8px; background: #fff; color: #617686; font-size: 11px; font-weight: 600; }
 .language-button svg:first-child { color: var(--teal); }
 .top-avatar { width: 31px; height: 31px; border: 0; background: #dcece8; color: var(--teal-dark); }
@@ -95,6 +96,13 @@ h1,h2,h3 { font-family: 'Segoe UI Variable', 'Segoe UI', sans-serif; }
 .clinic-location { display: flex; align-items: center; gap: 5px; margin: 0; color: #8595a2; font-size: 9px; }
 .clinic-location svg { flex: 0 0 auto; color: #9baab4; }
 .clinic-location span { color: #c0cbd2; }
+.directory-toolbar { display: flex; align-items: center; justify-content: space-between; margin: -9px 0 12px; color: #82939f; font-size: 9px; }
+.directory-toolbar label { display: inline-flex; align-items: center; gap: 7px; font-weight: 650; }
+.directory-toolbar select { padding: 5px 8px; border: 1px solid #e2e9ed; border-radius: 6px; background: #fff; color: #536b7a; font-size: 9px; }
+.directory-alert { margin: 0 0 12px; padding: 10px 12px; border: 1px solid #f0dfbd; border-radius: 8px; background: #fffaf0; color: #86652b; font-size: 10px; }
+.real-data-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 13px; padding-top: 11px; border-top: 1px solid #edf1f4; }
+.real-data-actions a { display: inline-flex; align-items: center; gap: 5px; color: #188578; font-size: 9px; font-weight: 700; text-decoration: none; }
+.real-data-actions a:hover { text-decoration: underline; }
 .favorite-button { flex: 0 0 auto; width: 27px; height: 27px; border: 1px solid #e7edf1; border-radius: 8px; background: #fff; color: #9eabb5; font-size: 19px; line-height: 1; }
 .favorite-button:hover,.favorite-button.saved { border-color: #f0c7c4; background: #fff5f3; color: #d97570; }
 .clinic-description { display: -webkit-box; overflow: hidden; margin: 9px 0 9px; color: #6f8291; font-size: 10px; line-height: 1.45; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
@@ -137,6 +145,8 @@ h1,h2,h3 { font-family: 'Segoe UI Variable', 'Segoe UI', sans-serif; }
 .quick-prompts button:hover { border-color: #b7ddd5; background: #f5fbf9; color: var(--teal-dark); }
 .quick-prompts svg { flex: 0 0 auto; color: #91a4af; }
 .assistant-compose { margin-top: 12px; padding: 8px 9px 7px; border: 1px solid #dce6ec; border-radius: 9px; background: #fff; box-shadow: 0 2px 6px #29465b06; }
+.compose-actions .voice-button { margin-left: auto; background: #edf7f4; color: #168578; }
+.compose-actions .voice-button:disabled { opacity: .65; }
 .assistant-compose textarea { display: block; width: 100%; resize: vertical; min-height: 44px; border: 0; outline: 0; color: var(--navy); font-size: 10px; line-height: 1.45; }
 .assistant-compose textarea::placeholder { color: #a2afb8; }
 .compose-actions { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding-top: 6px; border-top: 1px solid #f0f3f5; }
