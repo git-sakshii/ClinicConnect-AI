@@ -198,7 +198,7 @@ h1,h2,h3 { font-family: 'Segoe UI Variable', 'Segoe UI', sans-serif; }
 .portal-form>.primary-button { justify-self: start; }
 .access-panel>.privacy-hint { margin: 0 22px 18px; }
 .auth-tabs { display: flex; gap: 6px; margin: 0 0 14px; padding-bottom: 10px; border-bottom: 1px solid #edf1f4; }
-.auth-tabs button { padding: 7px 10px; border: 1px solid transparent; border-radius: 7px; background: transparent; color: #718592; font-size: 10px; font-weight: 700; }
+.auth-tabs button { flex: 1; padding: 7px 8px; border: 1px solid transparent; border-radius: 7px; background: transparent; color: #718592; font-size: 10px; font-weight: 700; white-space: nowrap; }
 .auth-tabs button.selected { border-color: #cde7e0; background: #eef8f5; color: #247d70; }
 .form-success { margin: 14px 0; padding: 10px 12px; border: 1px solid #cce7dc; border-radius: 8px; background: #f0faf5; color: #317d5d; font-size: 10px; }
 .status-pending { background: #fff3dd; color: #9a6d24; }
@@ -265,3 +265,4 @@ h1,h2,h3 { font-family: 'Segoe UI Variable', 'Segoe UI', sans-serif; }
   line-height: 1.45;
 }
 .ai-consent input { margin-top: 2px; accent-color: #168c80; }
+@media (max-width: 420px) { .auth-tabs { gap: 2px; } .auth-tabs button { padding: 7px 2px; font-size: 8px; } }
