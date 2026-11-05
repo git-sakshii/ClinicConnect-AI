@@ -39,6 +39,7 @@ const seedClinics = [
 ]
 
 const memory = { clinics: seedClinics, appointments: [], reservedSlots: new Set() }
+memory.users = []
 const osmCache = new Map()
 const osmInflight = new Map()
 const areaBounds = {
@@ -52,8 +53,80 @@ let nominatimLastRequest = 0
 let client
 let db
 let mode = 'demo-memory'
+const sessionSecret = process.env.AUTH_SECRET || crypto.randomBytes(32).toString('hex')
+const loginAttempts = new Map()
+
+function authToken(payload) {
+  const body = Buffer.from(JSON.stringify({ ...payload, exp: Date.now() + 7 * 24 * 60 * 60 * 1000 })).toString('base64url')
+  const signature = crypto.createHmac('sha256', sessionSecret).update(body).digest('base64url')
+  return `${body}.${signature}`
+}
+
+function readAuth(request) {
+  const cookie = request.headers.cookie?.split(';').map((part) => part.trim()).find((part) => part.startsWith('cc_session='))
+  if (!cookie) return null
+  const [body, supplied] = cookie.slice('cc_session='.length).split('.')
+  if (!body || !supplied) return null
+  const expected = crypto.createHmac('sha256', sessionSecret).update(body).digest()
+  let actual
+  try { actual = Buffer.from(supplied, 'base64url') } catch { return null }
+  if (actual.length !== expected.length || !crypto.timingSafeEqual(actual, expected)) return null
+  try {
+    const user = JSON.parse(Buffer.from(body, 'base64url').toString())
+    return user.exp > Date.now() ? user : null
+  } catch { return null }
+}
+
+function setSession(response, user) {
+  const token = authToken({ id: user.id, role: user.role, email: user.email, name: user.name || '' })
+  const secure = process.env.NODE_ENV === 'production' ? '; Secure' : ''
+  response.setHeader('Set-Cookie', `cc_session=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=604800${secure}`)
+}
+
+function requireRole(...roles) {
+  return (request, response, next) => {
+    request.auth = readAuth(request)
+    if (!request.auth || (roles.length && !roles.includes(request.auth.role))) return response.status(401).json({ error: 'Please sign in to continue.' })
+    next()
+  }
+}
+
+function hashPassword(password) {
+  const salt = crypto.randomBytes(16).toString('hex')
+  return new Promise((resolve, reject) => crypto.scrypt(password, salt, 64, (error, key) => error ? reject(error) : resolve(`${salt}:${key.toString('hex')}`)))
+}
+
+async function passwordMatches(password, stored) {
+  if (!stored || typeof stored !== 'string' || !stored.includes(':')) return false
+  const [salt, digest] = stored.split(':')
+  const key = await new Promise((resolve, reject) => crypto.scrypt(password, salt, 64, (error, value) => error ? reject(error) : resolve(value)))
+  const expected = Buffer.from(digest, 'hex')
+  return expected.length === key.length && crypto.timingSafeEqual(expected, key)
+}
+
+async function findUser(email) {
+  return db ? db.collection('users').findOne({ email }) : memory.users.find((user) => user.email === email) || null
+}
+
+async function saveUser(user) {
+  if (db) await db.collection('users').insertOne(user)
+  else memory.users.push(user)
+}
+
+async function userClinic(userId) {
+  return db ? clinicCollection().findOne({ ownerId: userId }) : memory.clinics.find((clinic) => clinic.ownerId === userId) || null
+}
+
+async function saveClinic(clinic) {
+  if (db) await clinicCollection().insertOne(clinic)
+  else memory.clinics.push(clinic)
+}
 
 async function publicClinic(clinic, date) {
+  const publicProfile = { ...clinic }
+  for (const field of ['ownerId', 'ownerEmail', 'active', 'createdAt', 'updatedAt', 'reviewedAt']) delete publicProfile[field]
+  const weekday = new Date(`${date}T12:00:00+05:30`).getDay()
+  if (Array.isArray(clinic.availabilityDays) && !clinic.availabilityDays.includes(weekday)) return { ...publicProfile, slots: [] }
   if (db) {
     const slotKeys = clinic.times.map((time) => ({
       updateOne: {
@@ -64,9 +137,9 @@ async function publicClinic(clinic, date) {
     }))
     await db.collection('slots').bulkWrite(slotKeys, { ordered: false })
     const available = new Set((await db.collection('slots').find({ clinicId: clinic.id, date, remaining: { $gt: 0 } }, { projection: { time: 1 } }).toArray()).map((slot) => slot.time))
-    return { ...clinic, slots: clinic.times.filter((time) => available.has(time)).map((time) => ({ time })) }
+    return { ...publicProfile, slots: clinic.times.filter((time) => available.has(time)).map((time) => ({ time })) }
   }
-  return { ...clinic, slots: clinic.times.filter((time) => !memory.reservedSlots.has(`${clinic.id}:${date}:${time}`)).map((time) => ({ time })) }
+  return { ...publicProfile, slots: clinic.times.filter((time) => !memory.reservedSlots.has(`${clinic.id}:${date}:${time}`)).map((time) => ({ time })) }
 }
 
 function clinicCollection() { return db?.collection('clinics') }
@@ -149,6 +222,141 @@ app.get('/api/health', (_request, response) => {
   response.json({ status: 'ok', mode, timestamp: new Date().toISOString() })
 })
 
+app.post('/api/auth/register-clinic', async (request, response, next) => {
+  try {
+    const { clinicName, email, password, area, address, phone, services } = request.body || {}
+    const cleanEmail = typeof email === 'string' ? email.trim().toLowerCase() : ''
+    const cleanName = typeof clinicName === 'string' ? clinicName.trim() : ''
+    const serviceList = Array.isArray(services) ? [...new Set(services.filter((item) => ['Dentistry', 'ENT', 'Dermatology', 'General medicine', 'Clinic'].includes(item)))] : []
+    if (!cleanName || cleanName.length > 100 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail) || typeof password !== 'string' || password.length < 12 || password.length > 128 || !area || !address || !phone || serviceList.length === 0) {
+      return response.status(400).json({ error: 'Add the clinic details, a valid email, at least one service, and a password of 12 or more characters.' })
+    }
+    if (await findUser(cleanEmail)) return response.status(409).json({ error: 'An account with this email already exists.' })
+    const now = new Date().toISOString()
+    const user = { id: crypto.randomUUID(), email: cleanEmail, passwordHash: await hashPassword(password), role: 'clinic', createdAt: now }
+    const clinic = {
+      id: crypto.randomUUID(), ownerId: user.id, ownerEmail: cleanEmail, source: 'partner', name: cleanName,
+      area: String(area).trim().slice(0, 80), address: String(address).trim().slice(0, 200),
+      phone: String(phone).trim().slice(0, 24), services: serviceList, languages: ['English'],
+      openingLabel: 'Hours set by clinic', description: 'Clinic profile provided by its operator.',
+      accent: 'teal', artLabel: serviceList[0].toUpperCase(), times: [], availabilityDays: [1, 2, 3, 4, 5, 6],
+      active: false, verificationStatus: 'Pending', createdAt: now,
+    }
+    await saveUser(user)
+    await saveClinic(clinic)
+    setSession(response, user)
+    response.status(201).json({ user: { id: user.id, email: user.email, role: user.role }, clinic: { ...clinic, passwordHash: undefined } })
+  } catch (error) { next(error) }
+})
+
+app.post('/api/auth/register-patient', async (request, response, next) => {
+  try {
+    const { name, email, password } = request.body || {}
+    const cleanEmail = typeof email === 'string' ? email.trim().toLowerCase() : ''
+    const cleanName = typeof name === 'string' ? name.trim() : ''
+    if (!cleanName || cleanName.length > 80 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail) || typeof password !== 'string' || password.length < 12 || password.length > 128) return response.status(400).json({ error: 'Add your name, a valid email, and a password of at least 12 characters.' })
+    if (await findUser(cleanEmail)) return response.status(409).json({ error: 'An account with this email already exists.' })
+    const user = { id: crypto.randomUUID(), email: cleanEmail, name: cleanName, passwordHash: await hashPassword(password), role: 'patient', createdAt: new Date().toISOString() }
+    await saveUser(user)
+    setSession(response, user)
+    response.status(201).json({ user: { id: user.id, email: user.email, name: user.name, role: user.role } })
+  } catch (error) { next(error) }
+})
+
+app.post('/api/auth/login', async (request, response, next) => {
+  try {
+    const { email, password } = request.body || {}
+    const cleanEmail = typeof email === 'string' ? email.trim().toLowerCase() : ''
+    const key = `${request.ip}:${cleanEmail}`
+    const prior = loginAttempts.get(key)
+    if (prior && prior.count >= 8 && Date.now() - prior.startedAt < 15 * 60 * 1000) return response.status(429).json({ error: 'Too many sign-in attempts. Wait 15 minutes and try again.' })
+    if (prior && Date.now() - prior.startedAt >= 15 * 60 * 1000) loginAttempts.delete(key)
+    const isAdmin = cleanEmail && process.env.ADMIN_EMAIL && process.env.ADMIN_PASSWORD && cleanEmail === process.env.ADMIN_EMAIL.trim().toLowerCase() && password === process.env.ADMIN_PASSWORD
+    const user = isAdmin ? { id: 'platform-admin', email: cleanEmail, role: 'admin' } : await findUser(cleanEmail)
+    const valid = isAdmin || (user && typeof password === 'string' && await passwordMatches(password, user.passwordHash))
+    if (!valid) {
+      const attempt = loginAttempts.get(key) || { count: 0, startedAt: Date.now() }
+      attempt.count += 1
+      loginAttempts.set(key, attempt)
+      return response.status(401).json({ error: 'Email or password is incorrect.' })
+    }
+    loginAttempts.delete(key)
+    setSession(response, user)
+    const clinic = user.role === 'clinic' ? await userClinic(user.id) : null
+    response.json({ user: { id: user.id, email: user.email, name: user.name || '', role: user.role }, clinic })
+  } catch (error) { next(error) }
+})
+
+app.get('/api/auth/me', async (request, response, next) => {
+  try {
+    const user = readAuth(request)
+    if (!user) return response.json({ user: null })
+    const profile = user.role === 'clinic' ? await userClinic(user.id) : null
+    response.json({ user: { id: user.id, email: user.email, name: user.name || '', role: user.role }, clinic: profile })
+  } catch (error) { next(error) }
+})
+
+app.post('/api/auth/logout', (_request, response) => {
+  const secure = process.env.NODE_ENV === 'production' ? '; Secure' : ''
+  response.setHeader('Set-Cookie', `cc_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0${secure}`)
+  response.json({ ok: true })
+})
+
+app.get('/api/clinic/me', requireRole('clinic'), async (request, response, next) => {
+  try { response.json({ clinic: await userClinic(request.auth.id) }) } catch (error) { next(error) }
+})
+
+app.put('/api/clinic/me', requireRole('clinic'), async (request, response, next) => {
+  try {
+    const clinic = await userClinic(request.auth.id)
+    if (!clinic) return response.status(404).json({ error: 'Clinic profile was not found.' })
+    const { clinicName, area, address, phone, website, services, times, availabilityDays, languages } = request.body || {}
+    const serviceList = Array.isArray(services) ? [...new Set(services.filter((item) => ['Dentistry', 'ENT', 'Dermatology', 'General medicine', 'Clinic'].includes(item)))] : []
+    const slots = Array.isArray(times) ? [...new Set(times.filter((item) => typeof item === 'string' && /^(?:[1-9]|1[0-2]):[0-5]\d\s?(?:am|pm)$/i.test(item.trim())).map((item) => item.trim()))].slice(0, 20) : []
+    const days = Array.isArray(availabilityDays) ? [...new Set(availabilityDays.filter((day) => Number.isInteger(day) && day >= 0 && day <= 6))] : []
+    const changes = {
+      name: typeof clinicName === 'string' ? clinicName.trim().slice(0, 100) : clinic.name,
+      area: typeof area === 'string' ? area.trim().slice(0, 80) : clinic.area,
+      address: typeof address === 'string' ? address.trim().slice(0, 200) : clinic.address,
+      phone: typeof phone === 'string' ? phone.trim().slice(0, 24) : clinic.phone,
+      website: typeof website === 'string' && /^https:\/\//i.test(website) ? website.trim().slice(0, 250) : null,
+      services: serviceList.length ? serviceList : clinic.services,
+      times: slots,
+      availabilityDays: days,
+      languages: Array.isArray(languages) ? [...new Set(languages.filter((item) => ['English', 'Kannada', 'Hindi'].includes(item)))] : clinic.languages,
+      artLabel: serviceList[0]?.toUpperCase() || clinic.artLabel,
+      updatedAt: new Date().toISOString(),
+    }
+    if (!changes.name || !changes.area || !changes.address || !changes.phone || !changes.times.length || !changes.availabilityDays.length) return response.status(400).json({ error: 'Complete the profile, add at least one time, and select at least one available day.' })
+    const needsReview = clinic.active && (changes.name !== clinic.name || changes.area !== clinic.area || changes.address !== clinic.address || changes.phone !== clinic.phone || JSON.stringify(changes.services) !== JSON.stringify(clinic.services))
+    if (needsReview) Object.assign(changes, { active: false, verificationStatus: 'Pending' })
+    if (db) await clinicCollection().updateOne({ id: clinic.id, ownerId: request.auth.id }, { $set: changes })
+    else Object.assign(clinic, changes)
+    response.json({ clinic: { ...clinic, ...changes } })
+  } catch (error) { next(error) }
+})
+
+app.get('/api/admin/clinics', requireRole('admin'), async (_request, response, next) => {
+  try {
+    const clinics = db ? await clinicCollection().find({ source: 'partner' }).sort({ createdAt: -1 }).toArray() : memory.clinics.filter((clinic) => clinic.source === 'partner')
+    response.json({ clinics })
+  } catch (error) { next(error) }
+})
+
+app.patch('/api/admin/clinics/:id', requireRole('admin'), async (request, response, next) => {
+  try {
+    const { active } = request.body || {}
+    if (typeof active !== 'boolean') return response.status(400).json({ error: 'Set active to true or false.' })
+    const clinic = db ? await clinicCollection().findOne({ id: request.params.id, source: 'partner' }) : memory.clinics.find((item) => item.id === request.params.id && item.source === 'partner')
+    if (!clinic) return response.status(404).json({ error: 'Clinic was not found.' })
+    if (active && (!clinic.times?.length || !clinic.availabilityDays?.length)) return response.status(400).json({ error: 'The clinic must complete its weekly availability before approval.' })
+    const changes = { active, verificationStatus: active ? 'Approved' : 'Pending', reviewedAt: new Date().toISOString() }
+    if (db) await clinicCollection().updateOne({ id: clinic.id }, { $set: changes })
+    else Object.assign(clinic, changes)
+    response.json({ clinic: { ...clinic, ...changes } })
+  } catch (error) { next(error) }
+})
+
 app.get('/api/clinics', async (request, response, next) => {
   try {
     const { search = '', area = '', service = '', source = 'demo', date = new Date().toISOString().slice(0, 10) } = request.query
@@ -157,6 +365,7 @@ app.get('/api/clinics', async (request, response, next) => {
       return response.json({ clinics, source: 'OpenStreetMap', fetchedAt: new Date().toISOString(), attribution: '© OpenStreetMap contributors' })
     }
     let clinics = await getClinics()
+    clinics = source === 'partners' ? clinics.filter((clinic) => clinic.source === 'partner' && clinic.active) : clinics.filter((clinic) => clinic.source !== 'partner')
     const term = String(search).trim().toLowerCase()
     const targetArea = String(area).trim().toLowerCase()
     const targetService = String(service).trim().toLowerCase()
@@ -170,9 +379,58 @@ app.get('/api/clinics', async (request, response, next) => {
   } catch (error) { next(error) }
 })
 
-app.post('/api/assistant/interpret', (request, response) => {
+app.get('/api/assistant/status', (_request, response) => response.json({ aiEnabled: Boolean(process.env.OPENAI_API_KEY) }))
+
+async function interpretWithOpenAI(message, language) {
+  const model = process.env.OPENAI_MODEL || 'gpt-4o-mini'
+  const upstream = await fetch('https://api.openai.com/v1/responses', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model,
+      store: false,
+      instructions: `You help route appointment requests to clinic services. This is not medical advice. Never diagnose, recommend treatment, or infer a condition. Use only these service labels: ENT, Dentistry, Dermatology, General medicine. Suggest a service only when the user's own words clearly identify a relevant body area or explicitly name the service; otherwise use null. Extract an area only when explicitly named from: Indiranagar, Koramangala, Whitefield. Detect if date and time preference are present. Reply in ${language === 'kn' ? 'Kannada' : 'English'}, briefly and neutrally. Ask the user to confirm any suggested service. Do not claim a booking is made or that slots are available.`,
+      input: [{ role: 'user', content: message }],
+      text: { format: { type: 'json_schema', name: 'booking_intent', strict: true, schema: {
+        type: 'object', additionalProperties: false,
+        properties: {
+          suggestedService: { type: ['string', 'null'], enum: ['ENT', 'Dentistry', 'Dermatology', 'General medicine', null] },
+          area: { type: ['string', 'null'], enum: ['Indiranagar', 'Koramangala', 'Whitefield', null] },
+          dateMentioned: { type: 'boolean' },
+          timeMentioned: { type: 'boolean' },
+          message: { type: 'string' },
+        },
+        required: ['suggestedService', 'area', 'dateMentioned', 'timeMentioned', 'message'],
+      } } },
+    }),
+    signal: AbortSignal.timeout(20_000),
+  })
+  if (!upstream.ok) throw new Error(`AI provider returned ${upstream.status}`)
+  const payload = await upstream.json()
+  const output = payload.output?.flatMap((item) => item.content || []).find((item) => item.type === 'output_text')?.text
+  if (!output) throw new Error('AI provider returned no structured result')
+  const parsed = JSON.parse(output)
+  const services = ['ENT', 'Dentistry', 'Dermatology', 'General medicine']
+  const areas = ['Indiranagar', 'Koramangala', 'Whitefield']
+  return {
+    source: 'openai',
+    suggestedService: services.includes(parsed.suggestedService) ? parsed.suggestedService : null,
+    area: areas.includes(parsed.area) ? parsed.area : null,
+    missing: [!parsed.dateMentioned && 'date', !parsed.timeMentioned && 'time'].filter(Boolean),
+    message: typeof parsed.message === 'string' ? parsed.message.slice(0, 500) : 'Please confirm the service and preferred appointment details.',
+  }
+}
+
+app.post('/api/assistant/interpret', async (request, response) => {
   const message = typeof request.body?.message === 'string' ? request.body.message.trim().slice(0, 500) : ''
   if (!message) return response.status(400).json({ error: 'Add a short description of what you are looking for.' })
+  if (request.body?.allowAi === true && process.env.OPENAI_API_KEY) {
+    try { return response.json(await interpretWithOpenAI(message, request.body?.language)) }
+    catch (error) {
+      console.error('AI intent request failed:', error.message)
+      return response.status(502).json({ error: 'AI matching is temporarily unavailable. Turn off AI matching or try again later.' })
+    }
+  }
 
   const text = message.toLowerCase()
   const mappings = [
@@ -193,23 +451,31 @@ app.post('/api/assistant/interpret', (request, response) => {
     message: kannada
       ? (match ? `ನಿಮ್ಮ ವಿವರಣೆಗೆ ${match.service} ಸೇವೆ ಹೊಂದಿರಬಹುದು. ಮುಂದುವರಿಯುವ ಮೊದಲು ಈ ಸೇವೆಯನ್ನು ದೃಢೀಕರಿಸಿ.` : 'ಈ ವಿವರಣೆಗೆ ಸರಿಯಾದ ಸೇವೆಯನ್ನು ಖಚಿತಪಡಿಸಲು ಸಾಧ್ಯವಾಗಲಿಲ್ಲ. ಸೇವೆಯ ಹೆಸರನ್ನು ಪ್ರಯತ್ನಿಸಿ ಅಥವಾ ಕ್ಲಿನಿಕ್ ಹುಡುಕಾಟ ಬಳಸಿ.')
       : match
-        ? `I found wording that may match a ${match.label}. I can show clinics that list ${match.service}; please confirm that this is the service you want to book.`
+        ? `I found wording that may match ${match.label === 'ear, nose or throat concern' ? 'an' : 'a'} ${match.label}. I can show clinics that list ${match.service}; please confirm that this is the service you want to book.`
         : 'I could not safely match that wording to a sample service. Try a clinic-listed service or use the search filters.',
   })
 })
 
 app.get('/api/appointments', async (_request, response, next) => {
   try {
-    const appointments = db
+    const auth = readAuth(_request)
+    const all = db
       ? await appointmentCollection().find({}).sort({ createdAt: -1 }).limit(100).toArray()
       : [...memory.appointments].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    let appointments = all.filter((appointment) => appointment.source !== 'partner')
+    if (auth?.role === 'admin') appointments = all
+    if (auth?.role === 'clinic') {
+      const clinic = await userClinic(auth.id)
+      appointments = all.filter((appointment) => appointment.clinicId === clinic?.id)
+    }
+    if (auth?.role === 'patient') appointments = all.filter((appointment) => appointment.patientId === auth.id)
     response.json({ appointments })
   } catch (error) { next(error) }
 })
 
 app.post('/api/appointments', async (request, response, next) => {
   try {
-    const { clinicId, service, date, time, patientName, phone } = request.body || {}
+      const { clinicId, service, date, time, patientName, phone } = request.body || {}
     if (![clinicId, service, date, time, patientName, phone].every((value) => typeof value === 'string' && value.trim())) {
       return response.status(400).json({ error: 'Clinic, service, date, time, name and phone are required.' })
     }
@@ -221,11 +487,18 @@ app.post('/api/appointments', async (request, response, next) => {
     if (!clinic || !clinic.services.includes(service) || !clinic.times.includes(time)) {
       return response.status(400).json({ error: 'Choose a service and time shown for this sample clinic.' })
     }
+    if (clinic.source === 'partner' && !clinic.active) return response.status(403).json({ error: 'This clinic is not approved for bookings yet.' })
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(new Date(`${date}T12:00:00+05:30`).getTime()) || date < new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Calcutta' })) return response.status(400).json({ error: 'Choose a valid appointment date that is not in the past.' })
+    const weekday = new Date(`${date}T12:00:00+05:30`).getDay()
+    if (Array.isArray(clinic.availabilityDays) && !clinic.availabilityDays.includes(weekday)) return response.status(400).json({ error: 'This clinic is closed on the selected day.' })
+    const auth = readAuth(request)
+    if (clinic.source === 'partner' && auth?.role !== 'patient') return response.status(401).json({ error: 'Create a patient account or sign in before requesting a partner clinic appointment.' })
     const key = `${clinicId}:${date}:${time}`
     const now = new Date().toISOString()
     const appointment = {
       id: crypto.randomUUID(), clinicId, clinicName: clinic.name, service, date, time,
       patientName: patientName.trim(), phone: phone.trim(), status: 'Pending', createdAt: now,
+      ...(clinic.source === 'partner' ? { source: 'partner', patientId: auth.id } : { source: 'demo' }),
       dateLabel: new Intl.DateTimeFormat('en-IN', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'Asia/Kolkata' }).format(new Date(`${date}T12:00:00+05:30`)),
     }
 
@@ -259,6 +532,12 @@ app.patch('/api/appointments/:id', async (request, response, next) => {
     if (db) {
       const current = await appointmentCollection().findOne({ id: request.params.id })
       if (!current) return response.status(404).json({ error: 'Appointment was not found.' })
+      if (current.source === 'partner') {
+        const auth = readAuth(request)
+        const clinic = auth?.role === 'clinic' ? await userClinic(auth.id) : null
+        const patientCancel = auth?.role === 'patient' && auth.id === current.patientId && status === 'Cancelled' && ['Pending', 'Confirmed'].includes(current.status)
+        if (auth?.role !== 'admin' && clinic?.id !== current.clinicId && !patientCancel) return response.status(403).json({ error: 'Only this clinic can update the booking. Patients may cancel their own pending or confirmed request.' })
+      }
       const releaseSlot = ['Declined', 'Cancelled'].includes(status) && ['Pending', 'Confirmed'].includes(current.status)
       const session = client.startSession()
       let result
@@ -279,6 +558,12 @@ app.patch('/api/appointments/:id', async (request, response, next) => {
     }
     const appointment = memory.appointments.find((item) => item.id === request.params.id)
     if (!appointment) return response.status(404).json({ error: 'Appointment was not found.' })
+    if (appointment.source === 'partner') {
+      const auth = readAuth(request)
+      const clinic = auth?.role === 'clinic' ? await userClinic(auth.id) : null
+      const patientCancel = auth?.role === 'patient' && auth.id === appointment.patientId && status === 'Cancelled' && ['Pending', 'Confirmed'].includes(appointment.status)
+      if (auth?.role !== 'admin' && clinic?.id !== appointment.clinicId && !patientCancel) return response.status(403).json({ error: 'Only this clinic can update the booking. Patients may cancel their own pending or confirmed request.' })
+    }
     const wasActive = ['Pending', 'Confirmed'].includes(appointment.status)
     if (wasActive && ['Declined', 'Cancelled'].includes(status)) memory.reservedSlots.delete(`${appointment.clinicId}:${appointment.date}:${appointment.time}`)
     appointment.status = status
@@ -293,12 +578,20 @@ app.use((error, _request, response, _next) => {
 })
 
 async function start() {
+  if (process.env.NODE_ENV === 'production' && (!process.env.AUTH_SECRET || !process.env.MONGODB_URI || !process.env.ADMIN_EMAIL || !process.env.ADMIN_PASSWORD)) {
+    throw new Error('Production requires AUTH_SECRET, MONGODB_URI, ADMIN_EMAIL, and ADMIN_PASSWORD.')
+  }
   if (process.env.MONGODB_URI) {
     client = new MongoClient(process.env.MONGODB_URI)
     await client.connect()
     db = client.db(process.env.MONGODB_DATABASE || 'clinicconnect')
     await db.collection('slots').createIndex({ clinicId: 1, date: 1, time: 1 }, { unique: true })
     await appointmentCollection().createIndex({ id: 1 }, { unique: true })
+    await appointmentCollection().createIndex({ clinicId: 1, date: 1, time: 1 })
+    await appointmentCollection().createIndex({ patientId: 1, createdAt: -1 })
+    await db.collection('users').createIndex({ email: 1 }, { unique: true })
+    await clinicCollection().createIndex({ id: 1 }, { unique: true })
+    await clinicCollection().createIndex({ ownerId: 1 }, { unique: true, sparse: true })
     if (await clinicCollection().countDocuments() === 0) await clinicCollection().insertMany(seedClinics.map((clinic) => ({ ...clinic, active: true })))
     mode = 'mongodb'
   } else {

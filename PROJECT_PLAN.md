@@ -1,5 +1,36 @@
 # ClinicConnect AI — End-to-End Implementation Plan
 
+## Implementation status — 5 November 2026
+
+Optional OpenAI intent matching is now implemented through the Responses API with structured output. The user explicitly opts in before their text/transcribed request is sent. The model suggests only a supported service or area; it does not see availability or make bookings. Without an API key or opt-in, the rules-based demo matcher remains active.
+
+### Working in the current prototype
+
+- React + Vite client and Express API, with sample listings and live, user-triggered OpenStreetMap/Nominatim directory search.
+- English/Kannada browser speech input and basic keyword-based speciality suggestions.
+- Clinic registration and sign-in, patient account creation at partner booking, signed HTTP-only sessions, scrypt password hashes, and role-scoped clinic/patient booking views.
+- Clinic profile and weekday/time-slot editing. New clinics remain hidden until the configured administrator approves them.
+- Partner appointment requests, clinic confirmation/decline and duplicate-slot protection. MongoDB persistence and transactional slot reservation are available when configured with a replica set.
+- Sample mode remains for college demonstrations; OpenStreetMap listings are public directory data and cannot be booked as ClinicConnect partners.
+
+### Still needed before a real pilot
+
+- Configure a durable MongoDB deployment, stable production `AUTH_SECRET`, admin credentials, HTTPS and deployment environments.
+- Verify clinic identity and credentials with a documented human review process; email verification and password recovery are not implemented.
+- Add schedule duration, breaks, holidays, provider-level availability, cancellation/rescheduling, booking notifications and audit history.
+- Complete privacy, consent, retention, deletion, backup and incident response decisions before real patient information is collected.
+- Connect WhatsApp Cloud API and a production speech pipeline only after the user/business account, number, webhook domain and consent text are ready.
+- Expand the optional constrained AI matcher with tested bilingual prompts and clinic-approved FAQ content after reviewing provider costs and privacy; keep the booking API authoritative.
+- Run the role-isolation, schedule edge-case, concurrency, accessibility and language quality checks, then deploy a stable demo and update the presentation.
+
+### Inputs needed from the project owner
+
+1. A MongoDB Atlas replica-set connection string stored locally in `server/.env` (never send it in chat or commit it).
+2. The preferred admin email and a strong admin password, plus a random `AUTH_SECRET`, also stored only in `server/.env`.
+3. One or more clinics that have agreed to participate, with a contact person who can verify their name, address, services, weekly schedule and booking policy.
+4. A decision on the first pilot area and whether clinics confirm every request or accept bookings immediately.
+5. For WhatsApp later: Meta Business ownership, a phone number, webhook domain and consent-approved message text. For production AI later: selected provider/API key and approval to send only the minimum required text.
+
 ## Project objective
 
 Build and demonstrate a multi-clinic appointment platform where patients can find participating clinics, describe a concern in everyday language, review a suggested service or specialty, and request a real available slot. Clinics manage their own profiles, schedules and bookings. A bilingual assistant supports web chat and, after account setup, a shared WhatsApp number with voice-note intake.

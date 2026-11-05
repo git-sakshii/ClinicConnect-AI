@@ -25,6 +25,7 @@ function nextDays() {
 function App() {
   const [clinics, setClinics] = useState([])
   const [appointments, setAppointments] = useState([])
+  const [account, setAccount] = useState(null)
   const [activeView, setActiveView] = useState('discover')
   const [selectedDay, setSelectedDay] = useState(nextDays()[0].key)
   const [query, setQuery] = useState('')
@@ -39,6 +40,8 @@ function App() {
   const [isListening, setIsListening] = useState(false)
   const [assistantResult, setAssistantResult] = useState(null)
   const [isThinking, setIsThinking] = useState(false)
+  const [aiEnabled, setAiEnabled] = useState(false)
+  const [aiConsent, setAiConsent] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
   const [bookingClinic, setBookingClinic] = useState(null)
   const [bookingSlot, setBookingSlot] = useState('')
@@ -54,14 +57,19 @@ function App() {
   }, [clinics, directorySource, query])
 
   useEffect(() => {
-    if (directorySource !== 'demo') return undefined
+    fetch('/api/auth/me').then((response) => response.json()).then((data) => setAccount(data.user || null)).catch(() => setAccount(null))
+    fetch('/api/assistant/status').then((response) => response.json()).then((data) => setAiEnabled(Boolean(data.aiEnabled))).catch(() => setAiEnabled(false))
+  }, [])
+
+  useEffect(() => {
+    if (directorySource === 'osm') return undefined
     let current = true
     async function load() {
       const params = new URLSearchParams()
       if (query) params.set('search', query)
       if (area) params.set('area', area)
       if (service !== 'All services') params.set('service', service)
-      params.set('source', 'demo')
+      params.set('source', directorySource)
       params.set('date', selectedDay)
       try {
         const response = await fetch(`/api/clinics?${params}`)
@@ -111,7 +119,7 @@ function App() {
     }
     void load()
     return () => { current = false }
-  }, [activeView, refreshKey])
+  }, [activeView, refreshKey, account?.role])
   useEffect(() => {
     if (!toast) return undefined
     const timer = window.setTimeout(() => setToast(''), 4200)
@@ -127,12 +135,11 @@ function App() {
     try {
       const response = await fetch('/api/assistant/interpret', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: clean, language }),
+        body: JSON.stringify({ message: clean, language, allowAi: aiEnabled && aiConsent }),
       })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || 'Assistant is unavailable')
       setAssistantResult(data)
-      if (data.suggestedService) setService(data.suggestedService)
       if (data.area) setArea(data.area)
     } catch {
       setAssistantResult({ message: 'I could not understand that just now. Try a clinic service name, or use the search filters.', source: 'fallback' })
@@ -238,9 +245,9 @@ function App() {
         <header className="topbar">
           <div className="breadcrumb">Patient workspace <span>/</span> <strong>{navigation.find((item) => item.id === activeView)?.label}</strong></div>
           <div className="top-actions">
-            <span className={`demo-pill ${directorySource === 'osm' ? 'live-pill' : ''}`}><span /> {directorySource === 'osm' ? 'OPENSTREETMAP' : 'SAMPLE DATA'}</span>
+            <span className={`demo-pill ${directorySource !== 'demo' ? 'live-pill' : ''}`}><span /> {directorySource === 'osm' ? 'OPENSTREETMAP' : directorySource === 'partners' ? 'PARTNER CLINICS' : 'SAMPLE DATA'}</span>
             <button className="language-button" onClick={() => setLanguage((current) => current === 'en' ? 'kn' : 'en')} aria-label="Switch voice language"><Languages size={16} /> {language === 'en' ? 'English' : 'ಕನ್ನಡ'} <ChevronDown size={14} /></button>
-            <button className="top-avatar" aria-label="User profile">SS</button>
+            <button className="top-avatar" aria-label="Open account and clinic portal" title={account?.email || 'Sign in'} onClick={() => setActiveView('clinic')}>{account?.email?.slice(0, 2).toUpperCase() || 'SS'}</button>
           </div>
         </header>
 
@@ -252,7 +259,7 @@ function App() {
                 <h1>Good morning, Sakshi <span className="wave">✦</span></h1>
                 <p className="welcome-sub">Tell us what you need. We’ll help you find a clinic and a time that works.</p>
               </div>
-                <div className="care-note"><ShieldCheck size={17} /><span>{directorySource === 'osm' ? 'Live public directory' : 'Sample directory'}</span></div>
+                <div className="care-note"><ShieldCheck size={17} /><span>{directorySource === 'osm' ? 'Live public directory' : directorySource === 'partners' ? 'Approved ClinicConnect partners' : 'Sample directory'}</span></div>
             </section>
 
             <section className="search-panel" aria-label="Clinic search">
@@ -265,15 +272,15 @@ function App() {
             <div className="content-grid">
               <section className="results-column">
                 <div className="section-head">
-                  <div><h2>Clinics around you</h2><p>{directorySource === 'osm' ? 'OpenStreetMap listings · contact clinics to confirm details and appointments' : 'Sample profiles · availability shown for your selected day'}</p></div>
+                  <div><h2>Clinics around you</h2><p>{directorySource === 'osm' ? 'OpenStreetMap listings · contact clinics to confirm details and appointments' : directorySource === 'partners' ? 'Approved clinics · times entered by clinic operators' : 'Sample profiles · availability shown for your selected day'}</p></div>
                   <label className="service-filter"><span className="sr-only">Filter by service</span><select value={service} onChange={(event) => setService(event.target.value)}><option>All services</option><option>Dentistry</option><option>ENT</option><option>Dermatology</option><option>General medicine</option><option>Clinic</option></select><ChevronDown size={14} /></label>
                 </div>
                 <div className="directory-toolbar">
-                  <label>Directory <select value={directorySource} onChange={(event) => { setDirectorySource(event.target.value); setClinics([]); setDirectoryError(''); setLiveSearch(null) }}><option value="osm">Live OpenStreetMap data</option><option value="demo">Sample prototype data</option></select></label>
+                  <label>Directory <select value={directorySource} onChange={(event) => { setDirectorySource(event.target.value); setClinics([]); setDirectoryError(''); setLiveSearch(null) }}><option value="osm">Live OpenStreetMap data</option><option value="partners">Approved ClinicConnect partners</option><option value="demo">Sample prototype data</option></select></label>
                   <span>{savedClinics.size} saved</span>
                 </div>
                 {directoryError && <div className="directory-alert" role="status">{directoryError}</div>}
-                {directorySource === 'demo' && <div className="date-strip" aria-label="Choose appointment day">
+                {directorySource !== 'osm' && <div className="date-strip" aria-label="Choose appointment day">
                   <button className="date-arrow" aria-label="Previous dates" onClick={() => setSelectedDay(days[0].key)}><ChevronLeft size={17} /></button>
                   {days.slice(0, 5).map((day) => <button key={day.key} className={`date-chip ${selectedDay === day.key ? 'selected' : ''}`} onClick={() => setSelectedDay(day.key)}><strong>{day.label}</strong>{day.sub && <span>{day.sub}</span>}</button>)}
                   <button className="date-arrow" aria-label="More dates" onClick={() => setSelectedDay(days[6].key)}><ChevronRight size={17} /></button>
@@ -295,7 +302,8 @@ function App() {
                   <div className="prompt-label">TRY ASKING</div>
                   <div className="quick-prompts">{quickPrompts.map((prompt) => <button key={prompt} onClick={() => askAssistant(prompt)}>{prompt}<ArrowUpRight size={13} /></button>)}</div>
                   <div className="assistant-compose"><textarea value={assistantText} onChange={(event) => setAssistantText(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); askAssistant() } }} placeholder={language === 'kn' ? 'ನಿಮಗೆ ಏನು ಬೇಕು ಎಂದು ಹೇಳಿ…' : 'Describe what you’re looking for…'} rows={2} aria-label="Describe what you need" /><div className="compose-actions"><span><AudioLines size={15} /> {isListening ? 'Listening…' : `Voice input · ${language === 'en' ? 'English' : 'ಕನ್ನಡ'}`}</span><button className="voice-button" onClick={listenForRequest} disabled={isListening} aria-label="Speak your request"><Mic size={16} /></button><button disabled={isThinking || !assistantText.trim()} onClick={() => askAssistant()} aria-label="Send message">{isThinking ? <span className="spinner" /> : <ArrowRight size={17} />}</button></div></div>
-                  <div className="assistant-disclaimer">Keyword-based demo matching (not diagnosis). Voice audio is handled by your browser speech service; it is not stored by this app.</div>
+                  <div className="assistant-disclaimer">{aiEnabled && aiConsent ? 'AI matching is on. Your text transcript is sent to OpenAI for request matching; it is not used to diagnose or provide treatment advice.' : 'Basic matching runs on this app. No AI provider receives your request unless you opt in below.'} Voice audio is handled by your browser speech service; this app receives the resulting text.</div>
+                  {aiEnabled && <label className="ai-consent"><input type="checkbox" checked={aiConsent} onChange={(event) => setAiConsent(event.target.checked)} /> Use AI matching (sends this text request to OpenAI)</label>}
                 </div>
                 <div className="whatsapp-card"><div className="whatsapp-badge"><MessageCircle size={18} /></div><div><strong>Prefer to talk?</strong><span>WhatsApp voice booking is on our roadmap.</span></div><ArrowRight size={16} /></div>
               </aside>
@@ -303,11 +311,11 @@ function App() {
           </div>
         )}
 
-        {activeView === 'appointments' && <AppointmentsPage appointments={appointments} onBrowse={() => setActiveView('discover')} />}
-        {activeView === 'clinic' && <ClinicPage appointments={appointments} onUpdate={updateAppointment} />}
+        {activeView === 'appointments' && <AppointmentsPage appointments={appointments} account={account} onUpdate={updateAppointment} onBrowse={() => setActiveView('discover')} />}
+        {activeView === 'clinic' && <ClinicPage appointments={appointments} onUpdate={updateAppointment} account={account} setAccount={setAccount} />}
       </main>
 
-      {bookingClinic && <BookingModal clinic={bookingClinic} slot={bookingSlot} day={selectedDay} name={patientName} phone={patientPhone} setName={setPatientName} setPhone={setPatientPhone} state={bookingState} onSubmit={submitBooking} onClose={() => { setBookingClinic(null); setBookingState('idle') }} onRetry={() => setBookingState('idle')} />}
+      {bookingClinic && <BookingModal clinic={bookingClinic} slot={bookingSlot} day={selectedDay} name={patientName} phone={patientPhone} setName={setPatientName} setPhone={setPatientPhone} state={bookingState} account={account} setAccount={setAccount} onPatientName={setPatientName} onSubmit={submitBooking} onClose={() => { setBookingClinic(null); setBookingState('idle') }} onRetry={() => setBookingState('idle')} />}
       {toast && <div className="toast" role="status"><Check size={16} />{toast}<button onClick={() => setToast('')} aria-label="Dismiss notification"><X size={15} /></button></div>}
     </div>
   )
@@ -319,7 +327,7 @@ function ClinicCard({ clinic, onBook, saved, onSave }) {
     <article className="clinic-card">
       <div className={`clinic-art art-${clinic.accent}`}><div className="art-orbit orbit-one" /><div className="art-orbit orbit-two" /><div className="clinic-art-icon"><Icon size={27} /></div><span className="art-label">{clinic.artLabel}</span></div>
       <div className="clinic-details">
-        <div className="clinic-title-row"><div><div className="clinic-tags"><span className="verified"><ShieldCheck size={12} /> {clinic.source === 'OpenStreetMap' ? 'OSM LISTING' : 'SAMPLE PROFILE'}</span>{clinic.languages?.map((language) => <span key={language} className="language-tag">{language}</span>)}</div><h3>{clinic.name}</h3><p className="clinic-location"><MapPin size={14} /> {clinic.area} <span>·</span> {clinic.address}</p></div><button className={`favorite-button ${saved ? 'saved' : ''}`} aria-label={`${saved ? 'Unsave' : 'Save'} ${clinic.name}`} onClick={onSave}>{saved ? '♥' : '♡'}</button></div>
+        <div className="clinic-title-row"><div><div className="clinic-tags"><span className="verified"><ShieldCheck size={12} /> {clinic.source === 'OpenStreetMap' ? 'OSM LISTING' : clinic.source === 'partner' ? 'APPROVED PARTNER' : 'SAMPLE PROFILE'}</span>{clinic.languages?.map((language) => <span key={language} className="language-tag">{language}</span>)}</div><h3>{clinic.name}</h3><p className="clinic-location"><MapPin size={14} /> {clinic.area} <span>·</span> {clinic.address}</p></div><button className={`favorite-button ${saved ? 'saved' : ''}`} aria-label={`${saved ? 'Unsave' : 'Save'} ${clinic.name}`} onClick={onSave}>{saved ? '♥' : '♡'}</button></div>
         <p className="clinic-description">{clinic.description}</p>
         <div className="clinic-meta"><span><Clock3 size={14} /> {clinic.openingLabel}</span><span className="service-label"><Stethoscope size={14} /> {clinic.services.join(' · ')}</span></div>
         {clinic.source === 'OpenStreetMap' ? <div className="real-data-actions">{clinic.phone && <a href={`tel:${clinic.phone}`}><MessageCircle size={13} /> {clinic.phone}</a>}{clinic.website && <a href={clinic.website} target="_blank" rel="noreferrer">Website <ArrowUpRight size={13} /></a>}<a href={clinic.mapsUrl} target="_blank" rel="noreferrer"><MapPin size={13} /> Directions</a></div> : <><div className="slot-row"><strong>Available times</strong><div className="slot-list">{clinic.slots.length ? clinic.slots.slice(0, 3).map((slot) => <button key={slot.time} onClick={() => onBook(clinic, slot.time)}>{slot.time}</button>) : <span className="no-slots">No slots on this day</span>}</div></div><button className="view-clinic" onClick={() => clinic.slots[0] && onBook(clinic, clinic.slots[0].time)}>Book first available <ArrowRight size={15} /></button></>}
@@ -328,18 +336,51 @@ function ClinicCard({ clinic, onBook, saved, onSave }) {
   )
 }
 
-function BookingModal({ clinic, slot, day, name, phone, setName, setPhone, state, onSubmit, onClose, onRetry }) {
+function BookingModal({ clinic, slot, day, name, phone, setName, setPhone, state, account, setAccount, onPatientName, onSubmit, onClose, onRetry }) {
+  const [accessMode, setAccessMode] = useState('register')
+  const [accessName, setAccessName] = useState('')
+  const [accessEmail, setAccessEmail] = useState('')
+  const [accessPassword, setAccessPassword] = useState('')
+  const [accessError, setAccessError] = useState('')
+  const [accessBusy, setAccessBusy] = useState(false)
+  const partnerBooking = clinic.source === 'partner'
   const date = new Intl.DateTimeFormat('en-IN', { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date(`${day}T12:00:00`))
+  async function submitAccess(event) {
+    event.preventDefault()
+    setAccessBusy(true)
+    setAccessError('')
+    try {
+      const response = await fetch(`/api/auth/${accessMode === 'register' ? 'register-patient' : 'login'}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: accessName, email: accessEmail, password: accessPassword }),
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Could not sign in')
+      if (data.user.role !== 'patient') throw new Error('Use a patient account for booking. Clinic accounts belong in the clinic portal.')
+      setAccount(data.user)
+      if (data.user.name) onPatientName(data.user.name)
+    } catch (error) { setAccessError(error.message) } finally { setAccessBusy(false) }
+  }
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <section className="booking-modal" role="dialog" aria-modal="true" aria-labelledby="booking-title">
         <div className="modal-top"><span className="modal-kicker"><CalendarDays size={15} /> APPOINTMENT REQUEST</span><button className="close-modal" onClick={onClose} aria-label="Close"><X size={19} /></button></div>
-        {state === 'done' ? <div className="booking-success"><div className="success-mark"><Check size={28} /></div><div className="eyebrow">REQUEST SUBMITTED</div><h2 id="booking-title">You’re on your way.</h2><p>Your appointment request for <strong>{clinic.name}</strong> is in the clinic demo queue.</p><div className="booking-summary"><span>{date}</span><strong>{slot}</strong></div><p className="pending-note">Status: Pending clinic confirmation. This is sample data and no real clinic was contacted.</p><button className="primary-button full-button" onClick={onClose}>Done <ArrowRight size={16} /></button></div> : <>
-          <h2 id="booking-title">Request this appointment</h2><p className="modal-intro">We’ll share only the details needed for this sample booking.</p>
+        {state === 'done' ? <div className="booking-success"><div className="success-mark"><Check size={28} /></div><div className="eyebrow">REQUEST SUBMITTED</div><h2 id="booking-title">You’re on your way.</h2><p>Your appointment request for <strong>{clinic.name}</strong> {partnerBooking ? 'was sent to the clinic.' : 'is in the sample clinic queue.'}</p><div className="booking-summary"><span>{date}</span><strong>{slot}</strong></div><p className="pending-note">Status: Pending clinic confirmation.{partnerBooking ? '' : ' This is sample data and no real clinic was contacted.'}</p><button className="primary-button full-button" onClick={onClose}>Done <ArrowRight size={16} /></button></div> : <>
+          <h2 id="booking-title">Request this appointment</h2><p className="modal-intro">{partnerBooking ? 'Sign in with a patient account to send a request to this clinic.' : 'We’ll share only the details needed for this sample booking.'}</p>
           <div className="selected-clinic"><div className={`small-clinic-icon art-${clinic.accent}`}><Stethoscope size={18} /></div><div><strong>{clinic.name}</strong><span>{date} · {slot}</span></div></div>
           {state === 'conflict' && <div className="form-alert">That sample slot was just taken. Choose another available time.</div>}
           {state === 'error' && <div className="form-alert">We couldn’t submit the request. Please retry.</div>}
-          <form onSubmit={onSubmit} className="booking-form"><label>Your name<input required maxLength="80" value={name} onChange={(event) => setName(event.target.value)} placeholder="Enter your name" autoComplete="name" /></label><label>Phone number for this demo<input required maxLength="20" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="e.g. 98765 43210" autoComplete="tel" /></label><div className="privacy-hint"><ShieldCheck size={15} /> Use sample details only. Do not enter real health information.</div><button className="primary-button full-button" type="submit" disabled={state === 'saving'}>{state === 'saving' ? 'Submitting…' : 'Submit booking request'} <ArrowRight size={16} /></button></form>
+          {partnerBooking && account?.role !== 'patient' ? <>
+            <div className="auth-tabs"><button className={accessMode === 'register' ? 'selected' : ''} onClick={() => setAccessMode('register')}>Create account</button><button className={accessMode === 'login' ? 'selected' : ''} onClick={() => setAccessMode('login')}>Sign in</button></div>
+            {accessError && <div className="form-alert">{accessError}</div>}
+            <form onSubmit={submitAccess} className="booking-form">
+              {accessMode === 'register' && <label>Your name<input required maxLength="80" value={accessName} onChange={(event) => setAccessName(event.target.value)} autoComplete="name" /></label>}
+              <label>Email<input required type="email" value={accessEmail} onChange={(event) => setAccessEmail(event.target.value)} autoComplete="email" /></label>
+              <label>Password<input required type="password" minLength="12" value={accessPassword} onChange={(event) => setAccessPassword(event.target.value)} autoComplete={accessMode === 'register' ? 'new-password' : 'current-password'} /></label>
+              <div className="privacy-hint"><ShieldCheck size={15} /> Partner booking requests are shared with this clinic. Do not include medical details here.</div>
+              <button className="primary-button full-button" type="submit" disabled={accessBusy}>{accessBusy ? 'Please wait…' : accessMode === 'register' ? 'Create patient account' : 'Sign in'}</button>
+            </form>
+          </> : <form onSubmit={onSubmit} className="booking-form"><label>Your name<input required maxLength="80" value={name} onChange={(event) => setName(event.target.value)} placeholder="Enter your name" autoComplete="name" /></label><label>Phone number<input required maxLength="20" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="e.g. 98765 43210" autoComplete="tel" /></label><div className="privacy-hint"><ShieldCheck size={15} /> {partnerBooking ? 'Your name and phone will be sent to this clinic for the appointment.' : 'Use sample details only. Do not enter real health information.'}</div><button className="primary-button full-button" type="submit" disabled={state === 'saving'}>{state === 'saving' ? 'Submitting…' : 'Submit booking request'} <ArrowRight size={16} /></button></form>}
           <button className="text-button" onClick={state === 'conflict' ? onRetry : onClose}>{state === 'conflict' ? 'Choose a different time' : 'Cancel'}</button>
         </>}
       </section>
@@ -347,13 +388,102 @@ function BookingModal({ clinic, slot, day, name, phone, setName, setPhone, state
   )
 }
 
-function AppointmentsPage({ appointments, onBrowse }) {
-  return <div className="page-content secondary-page"><div className="eyebrow"><span className="eyebrow-line" /> YOUR SCHEDULE</div><h1>My appointments</h1><p className="welcome-sub">Track requests and see updates from clinics.</p><div className="secondary-panel"><div className="panel-heading"><div><h2>Appointment requests</h2><p>Sample data stored in this demo session.</p></div><CalendarDays size={21} /></div>{appointments.length ? appointments.map((appointment) => <div className="appointment-row" key={appointment.id}><div className="appointment-date"><strong>{appointment.dateLabel}</strong><span>{appointment.time}</span></div><div className="appointment-info"><strong>{appointment.clinicName}</strong><span>{appointment.service} · {appointment.patientName}</span></div><span className={`status-chip status-${appointment.status.toLowerCase()}`}>{appointment.status}</span></div>) : <div className="empty-state large-empty"><CalendarDays size={24} /><strong>No appointments yet</strong><span>When you submit a booking request, it will appear here.</span><button className="primary-button" onClick={onBrowse}>Find a clinic <ArrowRight size={15} /></button></div>}</div></div>
+function AppointmentsPage({ appointments, account, onUpdate, onBrowse }) {
+  const label = account?.role === 'patient' ? 'Your partner clinic bookings are stored with your account.' : 'Sample data stored in this demo session.'
+  return <div className="page-content secondary-page"><div className="eyebrow"><span className="eyebrow-line" /> YOUR SCHEDULE</div><h1>My appointments</h1><p className="welcome-sub">Track requests and see updates from clinics.</p><div className="secondary-panel"><div className="panel-heading"><div><h2>Appointment requests</h2><p>{label}</p></div><CalendarDays size={21} /></div>{appointments.length ? appointments.map((appointment) => <div className="appointment-row" key={appointment.id}><div className="appointment-date"><strong>{appointment.dateLabel}</strong><span>{appointment.time}</span></div><div className="appointment-info"><strong>{appointment.clinicName}</strong><span>{appointment.service} · {appointment.patientName}</span></div><span className={`status-chip status-${appointment.status.toLowerCase()}`}>{appointment.status}</span>{account?.role === 'patient' && appointment.source === 'partner' && ['Pending', 'Confirmed'].includes(appointment.status) && <button className="decline-button" onClick={() => onUpdate(appointment.id, 'Cancelled')}>Cancel</button>}</div>) : <div className="empty-state large-empty"><CalendarDays size={24} /><strong>No appointments yet</strong><span>When you submit a booking request, it will appear here.</span><button className="primary-button" onClick={onBrowse}>Find a clinic <ArrowRight size={15} /></button></div>}</div></div>
 }
 
-function ClinicPage({ appointments, onUpdate }) {
+function ClinicPage({ appointments, onUpdate, account, setAccount }) {
+  const [accessMode, setAccessMode] = useState('register')
+  const [form, setForm] = useState({ clinicName: '', email: '', password: '', area: 'Indiranagar', address: '', phone: '', website: '', services: ['General medicine'], times: '9:00 am, 12:00 pm, 4:00 pm', availabilityDays: [1, 2, 3, 4, 5, 6], languages: ['English'] })
+  const [profile, setProfile] = useState(null)
+  const [adminClinics, setAdminClinics] = useState([])
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
   const requests = appointments.filter((appointment) => appointment.status === 'Pending')
-  return <div className="page-content secondary-page"><div className="eyebrow"><span className="eyebrow-line" /> CLINIC WORKSPACE</div><h1>Clinic portal</h1><p className="welcome-sub">Review sample booking requests and update their status.</p><div className="clinic-dashboard-banner"><div className="dashboard-icon"><Stethoscope size={21} /></div><div><strong>Sample Clinic Workspace</strong><span>Demo data · schedule editing will be added in the next milestone</span></div><span className="dashboard-state"><i /> DEMO</span></div><div className="secondary-panel"><div className="panel-heading"><div><h2>Incoming requests</h2><p>{requests.length} pending request{requests.length === 1 ? '' : 's'}</p></div><ArrowDownLeft size={21} /></div>{appointments.length ? appointments.map((appointment) => <div className="clinic-request-row" key={appointment.id}><div className="patient-avatar"><UserRound size={17} /></div><div className="request-main"><strong>{appointment.patientName}</strong><span>{appointment.service} · {appointment.dateLabel} at {appointment.time}</span></div><span className={`status-chip status-${appointment.status.toLowerCase()}`}>{appointment.status}</span>{appointment.status === 'Pending' && <div className="request-actions"><button className="decline-button" onClick={() => onUpdate(appointment.id, 'Declined')}>Decline</button><button className="confirm-button" onClick={() => onUpdate(appointment.id, 'Confirmed')}><Check size={14} /> Confirm</button></div>}</div>) : <div className="empty-state large-empty"><CalendarDays size={24} /><strong>No booking requests</strong><span>New sample patient requests will show here.</span></div>}</div></div>
+
+  useEffect(() => {
+    let current = true
+    if (account?.role === 'clinic') fetch('/api/clinic/me').then((response) => response.json()).then((data) => {
+      if (!current || !data.clinic) return
+      setProfile(data.clinic)
+      setForm((previous) => ({ ...previous, clinicName: data.clinic.name, area: data.clinic.area, address: data.clinic.address, phone: data.clinic.phone, website: data.clinic.website || '', services: data.clinic.services || [], times: (data.clinic.times || []).join(', '), availabilityDays: data.clinic.availabilityDays || [1, 2, 3, 4, 5, 6], languages: data.clinic.languages || ['English'] }))
+    }).catch(() => setError('Could not load your clinic profile.'))
+    if (account?.role === 'admin') fetch('/api/admin/clinics').then((response) => response.json()).then((data) => { if (current) setAdminClinics(data.clinics || []) }).catch(() => setError('Could not load clinic applications.'))
+    return () => { current = false }
+  }, [account?.id, account?.role])
+
+  function change(field, value) { setForm((previous) => ({ ...previous, [field]: value })) }
+  function toggleList(field, value) { setForm((previous) => ({ ...previous, [field]: previous[field].includes(value) ? previous[field].filter((item) => item !== value) : [...previous[field], value] })) }
+
+  async function submitAccess(event) {
+    event.preventDefault(); setBusy(true); setError(''); setMessage('')
+    const registering = accessMode === 'register'
+    try {
+      const response = await fetch(`/api/auth/${registering ? 'register-clinic' : 'login'}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(registering ? form : { email: form.email, password: form.password }) })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Could not sign in')
+      if (data.user.role !== 'clinic' && data.user.role !== 'admin') throw new Error('This portal is for clinics and platform administrators.')
+      setAccount(data.user)
+      if (data.clinic) setProfile(data.clinic)
+      setMessage(registering ? 'Clinic account created. Complete your schedule, then request platform review.' : 'Signed in successfully.')
+    } catch (issue) { setError(issue.message) } finally { setBusy(false) }
+  }
+
+  async function saveProfile(event) {
+    event.preventDefault(); setBusy(true); setError(''); setMessage('')
+    const payload = { ...form, times: form.times.split(',').map((item) => item.trim()).filter(Boolean) }
+    try {
+      const response = await fetch('/api/clinic/me', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Could not save profile')
+      setProfile(data.clinic); setMessage('Clinic profile and weekly schedule saved.')
+    } catch (issue) { setError(issue.message) } finally { setBusy(false) }
+  }
+
+  async function reviewClinic(id, active) {
+    setError('')
+    try {
+      const response = await fetch(`/api/admin/clinics/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ active }) })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Could not update review')
+      setAdminClinics((current) => current.map((clinic) => clinic.id === id ? data.clinic : clinic))
+    } catch (issue) { setError(issue.message) }
+  }
+
+  async function signOut() {
+    await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {})
+    setAccount(null); setProfile(null); setMessage('Signed out.')
+  }
+
+  if (account?.role === 'patient') return <div className="page-content secondary-page"><div className="eyebrow"><span className="eyebrow-line" /> ACCOUNT</div><h1>Patient account</h1><p className="welcome-sub">Signed in as {account.email}. Partner booking requests will appear under My appointments.</p><button className="text-button" onClick={signOut}>Sign out</button></div>
+
+  const serviceChoices = ['Dentistry', 'ENT', 'Dermatology', 'General medicine', 'Clinic']
+  const dayChoices = [['Sun', 0], ['Mon', 1], ['Tue', 2], ['Wed', 3], ['Thu', 4], ['Fri', 5], ['Sat', 6]]
+  return <div className="page-content secondary-page"><div className="eyebrow"><span className="eyebrow-line" /> CLINIC WORKSPACE</div><h1>Clinic portal</h1><p className="welcome-sub">Register your clinic, manage its listing and schedule, and review booking requests.</p>
+    {error && <div className="form-alert">{error}</div>}{message && <div className="form-success">{message}</div>}
+    {!account && <div className="secondary-panel access-panel"><div className="auth-tabs"><button className={accessMode === 'register' ? 'selected' : ''} onClick={() => setAccessMode('register')}>Register clinic</button><button className={accessMode === 'login' ? 'selected' : ''} onClick={() => setAccessMode('login')}>Clinic sign in</button></div>
+      <form onSubmit={submitAccess} className="portal-form">
+        {accessMode === 'register' && <><label>Clinic name<input required maxLength="100" value={form.clinicName} onChange={(event) => change('clinicName', event.target.value)} /></label><label>Area<input required maxLength="80" value={form.area} onChange={(event) => change('area', event.target.value)} /></label><label>Street address<input required maxLength="200" value={form.address} onChange={(event) => change('address', event.target.value)} /></label><label>Clinic phone<input required maxLength="24" value={form.phone} onChange={(event) => change('phone', event.target.value)} /></label><fieldset><legend>Services</legend><div className="choice-row">{serviceChoices.map((item) => <label key={item}><input type="checkbox" checked={form.services.includes(item)} onChange={() => toggleList('services', item)} />{item}</label>)}</div></fieldset></>}
+        <label>Clinic email<input required type="email" autoComplete="email" value={form.email} onChange={(event) => change('email', event.target.value)} /></label><label>Password<input required type="password" minLength="12" autoComplete={accessMode === 'register' ? 'new-password' : 'current-password'} value={form.password} onChange={(event) => change('password', event.target.value)} /><small>Use at least 12 characters.</small></label>
+        <button className="primary-button" type="submit" disabled={busy}>{busy ? 'Please wait…' : accessMode === 'register' ? 'Create clinic account' : 'Sign in'} <ArrowRight size={15} /></button>
+      </form><p className="privacy-hint"><ShieldCheck size={15} /> New clinic listings stay hidden from patients until a platform administrator approves them.</p>
+    </div>}
+    {account?.role === 'clinic' && profile && <>
+      <div className="clinic-dashboard-banner"><div className="dashboard-icon"><Stethoscope size={21} /></div><div><strong>{profile.name}</strong><span>{account.email} · {profile.verificationStatus || 'Pending review'}</span></div><span className="dashboard-state"><i /> {profile.active ? 'APPROVED' : 'PENDING'}</span><button className="text-button" onClick={signOut}>Sign out</button></div>
+      <div className="secondary-panel"><div className="panel-heading"><div><h2>Clinic profile & availability</h2><p>Only your clinic can edit this listing.</p></div><CalendarDays size={21} /></div>
+        <form onSubmit={saveProfile} className="portal-form"><label>Clinic name<input required value={form.clinicName} onChange={(event) => change('clinicName', event.target.value)} /></label><label>Area<input required value={form.area} onChange={(event) => change('area', event.target.value)} /></label><label>Street address<input required value={form.address} onChange={(event) => change('address', event.target.value)} /></label><label>Phone<input required value={form.phone} onChange={(event) => change('phone', event.target.value)} /></label><label>Website (optional, https)<input value={form.website} onChange={(event) => change('website', event.target.value)} placeholder="https://example.com" /></label>
+          <fieldset><legend>Services</legend><div className="choice-row">{serviceChoices.map((item) => <label key={item}><input type="checkbox" checked={form.services.includes(item)} onChange={() => toggleList('services', item)} />{item}</label>)}</div></fieldset>
+          <fieldset><legend>Days open</legend><div className="choice-row">{dayChoices.map(([label, value]) => <label key={value}><input type="checkbox" checked={form.availabilityDays.includes(value)} onChange={() => toggleList('availabilityDays', value)} />{label}</label>)}</div></fieldset>
+          <label>Appointment times (comma separated)<input required value={form.times} onChange={(event) => change('times', event.target.value)} placeholder="9:00 am, 1:30 pm, 4:00 pm" /><small>12-hour format, for example 9:00 am. Use only times your clinic can honor.</small></label>
+          <button className="primary-button" type="submit" disabled={busy}>{busy ? 'Saving…' : 'Save profile and schedule'} <Check size={15} /></button>
+        </form>
+      </div>
+      <div className="secondary-panel"><div className="panel-heading"><div><h2>Incoming appointments</h2><p>{requests.length} pending request{requests.length === 1 ? '' : 's'}</p></div><ArrowDownLeft size={21} /></div>{appointments.length ? appointments.map((appointment) => <div className="clinic-request-row" key={appointment.id}><div className="patient-avatar"><UserRound size={17} /></div><div className="request-main"><strong>{appointment.patientName}</strong><span>{appointment.service} · {appointment.dateLabel} at {appointment.time} · {appointment.phone}</span></div><span className={`status-chip status-${appointment.status.toLowerCase()}`}>{appointment.status}</span>{appointment.status === 'Pending' && <div className="request-actions"><button className="decline-button" onClick={() => onUpdate(appointment.id, 'Declined')}>Decline</button><button className="confirm-button" onClick={() => onUpdate(appointment.id, 'Confirmed')}><Check size={14} /> Confirm</button></div>}</div>) : <div className="empty-state large-empty"><CalendarDays size={24} /><strong>No booking requests</strong><span>Requests for this clinic will show here.</span></div>}</div>
+    </>}
+    {account?.role === 'admin' && <><div className="clinic-dashboard-banner"><div className="dashboard-icon"><ShieldCheck size={21} /></div><div><strong>Platform review</strong><span>Approve only clinics whose identity and details you have checked.</span></div><button className="text-button" onClick={signOut}>Sign out</button></div><div className="secondary-panel"><div className="panel-heading"><div><h2>Clinic applications</h2><p>{adminClinics.filter((clinic) => !clinic.active).length} awaiting review</p></div></div>{adminClinics.length ? adminClinics.map((clinic) => <div className="clinic-request-row" key={clinic.id}><div className="request-main"><strong>{clinic.name}</strong><span>{clinic.area} · {clinic.address} · {clinic.ownerEmail}</span><span>{clinic.services.join(', ')} · {clinic.times?.length || 0} appointment times</span></div><span className={`status-chip ${clinic.active ? 'status-confirmed' : 'status-pending'}`}>{clinic.verificationStatus || 'Pending'}</span>{!clinic.active && <div className="request-actions"><button className="confirm-button" disabled={!clinic.times?.length} onClick={() => reviewClinic(clinic.id, true)}><Check size={14} /> Approve</button></div>}</div>) : <div className="empty-state large-empty"><ShieldCheck size={24} /><strong>No clinic applications</strong></div>}</div></>}
+  </div>
 }
 
 export default App

@@ -1,6 +1,6 @@
 # ClinicConnect AI
 
-Multi-clinic appointment discovery and booking. This repository currently contains the first interactive student-prototype milestone.
+Multi-clinic appointment discovery and booking. This is a student pilot prototype; deployment and real patient use still need external setup and review.
 
 ## Current milestone
 
@@ -8,17 +8,20 @@ Multi-clinic appointment discovery and booking. This repository currently contai
 - Express API with a live, user-triggered OpenStreetMap/Nominatim clinic search for Indiranagar, Koramangala and Whitefield, plus a clearly separated sample-data mode.
 - Live listings include OpenStreetMap links and map directions. The prototype does not invent live schedules, contact details or verification; contact a provider directly to confirm them.
 - Saved clinics persist in the browser using local storage.
-- Browser speech-to-text input for English (India) and Kannada, with simple bilingual concern-to-speciality keyword matching. This is not an LLM or medical advice.
-- A rules-based booking helper that maps a few phrases to clinic-listed services. It is explicitly a demo matcher; no LLM is connected yet.
-- Patient booking requests and a clinic portal demo with confirm/decline actions.
-- In-memory data by default. MongoDB Atlas persistence can be enabled with `MONGODB_URI`.
-- The sample directory and bookings are synthetic. Live directory results are public OpenStreetMap data and may be incomplete or outdated. Do not enter real patient or health information into this student prototype.
+- Clinic operators can register, sign in, edit their clinic profile, set open weekdays and appointment times, and review their own booking requests.
+- New clinic profiles stay private until an administrator approves them. Admin sign-in is configured with environment variables.
+- Patients can create accounts to request appointments with approved ClinicConnect partners. Requests are visible to the patient, that clinic and the administrator; they are not sent by email or WhatsApp yet.
+- Passwords are hashed with Node's scrypt; the app uses signed HTTP-only, same-site cookies, login throttling and role-based data scoping.
+- Browser speech-to-text input for English (India) and Kannada, with a simple bilingual rules fallback.
+- Optional OpenAI request matching through the Responses API. It is only enabled when the server has a key, and the patient must opt in before their text is sent. It suggests a service for the patient to confirm; it does not diagnose, check availability, or book.
+- Sample bookings remain available for the classroom demo. MongoDB Atlas persistence can be enabled with `MONGODB_URI`; a replica set is required for atomic slot reservations.
+- Live directory results are public OpenStreetMap data and may be incomplete or outdated. Do not enter real patient or health information into the prototype until the remaining privacy, operational and deployment work is complete.
 
 ## Requirements
 
 - Node.js 22.12+ (Node 24 LTS is suitable).
 - npm 10+.
-- Optional: MongoDB Atlas or a MongoDB replica-set deployment for persistent bookings. The API uses a transaction to reserve a slot and create a booking atomically.
+- MongoDB Atlas or a MongoDB replica-set deployment for persistent accounts and bookings. The API uses a transaction to reserve a slot and create a booking atomically.
 
 ## Run locally
 
@@ -31,7 +34,7 @@ npm run dev
 - Web app: <http://localhost:5173>
 - API health: <http://localhost:3001/api/health>
 
-Without a database connection, the API starts in temporary in-memory demo mode. Bookings disappear when the API restarts. To enable MongoDB, copy `.env.example` to `server/.env`, set `MONGODB_URI` and `MONGODB_DATABASE`, then restart the API. Never commit `.env` or share a database URI. Live OpenStreetMap lookup requires internet access. Searches are user-triggered, cached in the server for one hour, rate-limited to at most one request per second, and send only a generic clinic/service category and area to Nominatim; the free-text search stays in the app. See the [Nominatim usage policy](https://operations.osmfoundation.org/policies/nominatim/).
+Without a database connection, users, clinic applications and bookings are held in memory and disappear when the API restarts. For local persistence, copy `.env.example` to `server/.env`, add `MONGODB_URI`, `MONGODB_DATABASE`, a long random `AUTH_SECRET`, and `ADMIN_EMAIL` plus `ADMIN_PASSWORD`, then restart the API. Add `OPENAI_API_KEY` to enable optional AI matching. Never commit `.env` or share its values. Sign in to the clinic portal with the configured admin email and password to approve clinic applications. Live OpenStreetMap lookup requires internet access. Searches are user-triggered, cached for one hour and limited to one Nominatim request per second; only the category and area are sent upstream. See the [Nominatim usage policy](https://operations.osmfoundation.org/policies/nominatim/).
 
 ## Useful commands
 
@@ -42,12 +45,14 @@ npm run lint      # Lint frontend source
 npm start         # Start the API (for a separately served frontend)
 ```
 
-## Current limitations
+## Remaining before a real pilot
 
-- Login, roles and clinic onboarding are not implemented yet; the clinic portal is a demo view.
-- Schedule rules and profile editing are the next backend milestone.
-- Assistant matching uses a small hard-coded keyword map. It is not AI, diagnosis or medical advice.
-- WhatsApp Cloud API is planned, not connected. Browser voice input is not WhatsApp voice-note integration.
-- Sample clinic names and appointment times do not represent real providers or availability. Live OpenStreetMap directory entries are not onboarded ClinicConnect partners and cannot be booked through this prototype.
+- The current admin approval is an internal status toggle; it does not verify clinic registration, licenses or staff identity against official records.
+- Account email verification and password recovery are not connected. Clinic and patient accounts are suitable for a controlled prototype only.
+- Clinic schedules currently use a set of daily times and open weekdays. Appointment duration, breaks, holidays, doctor-level capacity and rescheduling rules still need implementation.
+- Booking notifications, patient cancellation, reminders, audit history and operational support are not connected.
+- WhatsApp Cloud API and voice-note ingestion are not connected. Browser voice input is not WhatsApp voice-note integration.
+- OpenStreetMap listings are not ClinicConnect partners and cannot be booked. Sample profiles and times are synthetic.
+- Before any real patient pilot: configure hosted MongoDB and HTTPS, set production secrets, add email verification and recovery, complete a privacy/consent and retention review, recruit and manually verify clinics, and test recovery, backups and incident handling.
 
 See [`PROJECT_PLAN.md`](./PROJECT_PLAN.md) for the end-to-end implementation roadmap.

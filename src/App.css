@@ -185,6 +185,24 @@ h1,h2,h3 { font-family: 'Segoe UI Variable', 'Segoe UI', sans-serif; }
 .status-completed { background: #edf1f5; color: #657c8c; }
 .large-empty { padding: 58px 20px; border: 0; }
 .large-empty .primary-button { margin-top: 10px; }
+.access-panel { max-width: 720px; padding: 20px; }
+.portal-form { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; padding: 20px 22px; }
+.portal-form>label { display: grid; align-content: start; gap: 6px; color: #546b7b; font-size: 10px; font-weight: 700; }
+.portal-form input:not([type="checkbox"]) { min-height: 39px; padding: 0 10px; border: 1px solid #dfe7ec; border-radius: 8px; color: var(--navy); font-size: 11px; }
+.portal-form small { color: #8a999f; font-size: 9px; font-weight: 400; line-height: 1.4; }
+.portal-form fieldset { grid-column: 1 / -1; margin: 0; padding: 11px 12px; border: 1px solid #e5ecef; border-radius: 9px; }
+.portal-form legend { padding: 0 5px; color: #546b7b; font-size: 10px; font-weight: 700; }
+.choice-row { display: flex; flex-wrap: wrap; gap: 9px 16px; }
+.choice-row label { display: inline-flex; align-items: center; gap: 6px; color: #657b89; font-size: 10px; }
+.choice-row input { accent-color: var(--teal-dark); }
+.portal-form>.primary-button { justify-self: start; }
+.access-panel>.privacy-hint { margin: 0 22px 18px; }
+.auth-tabs { display: flex; gap: 6px; margin: 0 0 14px; padding-bottom: 10px; border-bottom: 1px solid #edf1f4; }
+.auth-tabs button { padding: 7px 10px; border: 1px solid transparent; border-radius: 7px; background: transparent; color: #718592; font-size: 10px; font-weight: 700; }
+.auth-tabs button.selected { border-color: #cde7e0; background: #eef8f5; color: #247d70; }
+.form-success { margin: 14px 0; padding: 10px 12px; border: 1px solid #cce7dc; border-radius: 8px; background: #f0faf5; color: #317d5d; font-size: 10px; }
+.status-pending { background: #fff3dd; color: #9a6d24; }
+.clinic-dashboard-banner .text-button { margin: 0 0 0 8px; }
 .clinic-dashboard-banner { display: flex; align-items: center; gap: 12px; margin-top: 24px; padding: 15px 17px; border: 1px solid #dfebe7; border-radius: 12px; background: #f8fcfa; }
 .dashboard-icon { display: grid; width: 37px; height: 37px; place-items: center; border-radius: 11px; background: #e0f3ed; color: #278777; }
 .clinic-dashboard-banner>div:nth-child(2) { display: grid; gap: 3px; }
@@ -237,3 +255,13 @@ h1,h2,h3 { font-family: 'Segoe UI Variable', 'Segoe UI', sans-serif; }
 @media (max-width: 1150px) { .sidebar { width: 220px; } .main-area { width: calc(100% - 220px); margin-left: 220px; } .topbar { padding: 0 28px; } .page-content { padding-right: 28px; padding-left: 28px; } .content-grid { grid-template-columns: minmax(0,1fr) 300px; gap: 15px; } .clinic-card { grid-template-columns: 130px minmax(0,1fr); } .slot-row { align-items: flex-start; flex-direction: column; gap: 6px; } }
 @media (max-width: 900px) { .sidebar { width: 68px; align-items: center; padding-right: 9px; padding-left: 9px; } .brand { padding: 0; } .brand>span:last-child,.side-caption,.nav-item span,.side-help,.profile-copy,.profile-chevron { display: none; } .side-nav { width: 100%; margin-top: 48px; } .nav-item { justify-content: center; padding: 0; } .nav-item.active::before { left: -9px; } .nav-count { position: absolute; top: 3px; right: 3px; display: grid !important; width: 15px; height: 15px; font-size: 8px; } .profile-mini { justify-content: center; width: 100%; padding-top: 13px; } .main-area { width: calc(100% - 68px); margin-left: 68px; } .content-grid { grid-template-columns: minmax(0,1fr); } .assistant-column { grid-template-columns: minmax(0,1fr) minmax(190px,.5fr); align-items: start; } .assistant-card { max-width: none; } .whatsapp-card { margin-top: 0; } }
 @media (max-width: 620px) { .sidebar { width: 56px; padding: 18px 6px 12px; } .brand-mark { width: 33px; height: 33px; } .side-nav { margin-top: 36px; } .nav-item { min-height: 42px; } .nav-item.active::before { left: -6px; } .profile-mini { padding-top: 11px; } .avatar { width: 31px; height: 31px; } .main-area { width: calc(100% - 56px); margin-left: 56px; } .topbar { height: 59px; padding: 0 14px; } .breadcrumb { overflow: hidden; max-width: 48%; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; } .breadcrumb span { margin: 0 5px; } .top-actions { gap: 8px; } .demo-pill { font-size: 7px; letter-spacing: .3px; } .language-button { gap: 4px; padding: 6px 7px; font-size: 9px; } .language-button svg:first-child { width: 13px; } .top-avatar { width: 28px; height: 28px; font-size: 9px; } .page-content { padding: 25px 14px 34px; } .welcome-row { align-items: flex-start; margin-bottom: 16px; } .welcome-row h1,.secondary-page h1 { font-size: 24px; } .welcome-sub { max-width: 390px; font-size: 11px; } .care-note { display: none; } .search-panel { display: grid; grid-template-columns: 1fr auto; gap: 10px 7px; padding: 12px; } .search-input-wrap { grid-column: 1 / -1; min-height: 29px; } .search-divider { display: none; } .search-select { grid-column: 1; padding-left: 2px; } .search-select select { max-width: 150px; } .search-submit { grid-column: 2; grid-row: 2; min-height: 37px; padding: 0 11px; font-size: 9px; } .content-grid { gap: 19px; margin-top: 22px; } .section-head { align-items: flex-start; } .section-head h2 { font-size: 14px; } .section-head p { max-width: 210px; font-size: 8px; line-height: 1.45; } .service-filter { padding: 7px 6px; } .service-filter select { max-width: 95px; font-size: 8px; } .date-strip { gap: 3px; justify-content: space-between; } .date-chip { min-width: 48px; height: 36px; padding: 2px 5px; font-size: 8px; } .date-chip strong { font-size: 8px; } .date-arrow { width: 22px; } .clinic-card { grid-template-columns: 82px minmax(0,1fr); min-height: 216px; } .clinic-art-icon { width: 46px; height: 46px; border-radius: 16px; } .clinic-art-icon svg { width: 21px; } .art-label { bottom: 11px; font-size: 6px; letter-spacing: .6px; } .art-orbit { width: 88px; height: 88px; } .orbit-two { width: 117px; height: 117px; } .clinic-details { padding: 11px 10px 10px; } .clinic-details h3 { font-size: 12px; } .verified,.language-tag { font-size: 6px; padding: 3px 4px; } .clinic-location { align-items: flex-start; font-size: 8px; line-height: 1.45; } .clinic-description { margin: 8px 0; font-size: 9px; } .clinic-meta { gap: 7px; font-size: 8px; } .slot-row { margin-top: 8px; } .slot-row>strong { font-size: 8px; } .slot-list { gap: 4px; } .slot-list button { min-width: 45px; padding: 5px 4px; font-size: 8px; } .view-clinic { margin-top: 7px; font-size: 8px; } .assistant-column { grid-template-columns: 1fr; } .whatsapp-card { order: -1; } .secondary-page { padding-top: 32px; } .appointment-row,.clinic-request-row { flex-wrap: wrap; gap: 9px; padding: 13px; } .appointment-info { min-width: 120px; } .request-actions { width: 100%; margin-left: 41px; } .status-chip { min-width: 65px; } .panel-heading { padding: 15px; } .clinic-dashboard-banner { align-items: flex-start; flex-wrap: wrap; padding: 12px; } .dashboard-state { margin: auto 0 0 auto; } .booking-modal { padding: 20px 17px 15px; } .toast { right: 12px; bottom: 12px; left: 12px; font-size: 10px; } }
+.ai-consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 10px;
+  color: #53616a;
+  font-size: 11px;
+  line-height: 1.45;
+}
+.ai-consent input { margin-top: 2px; accent-color: #168c80; }
