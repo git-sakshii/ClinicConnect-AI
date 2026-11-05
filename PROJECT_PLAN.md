@@ -4,6 +4,8 @@
 
 Optional OpenAI intent matching is now implemented through the Responses API with structured output. The user explicitly opts in before their text/transcribed request is sent. The model suggests only a supported service or area; it does not see availability or make bookings. Without an API key or opt-in, the rules-based demo matcher remains active.
 
+The rules fallback now recognizes common acne/pimple requests in English and Hindi and can suggest Dermatology in either response language. The directory accepts a typed area (including an onboarded clinic's area) and makes the area/service/date filters visible when no clinics match. “Near me” uses the selected area; device geolocation is not connected.
+
 ### Working in the current prototype
 
 - React + Vite client and Express API, with sample listings and live, user-triggered OpenStreetMap/Nominatim directory search.

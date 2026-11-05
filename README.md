@@ -12,7 +12,9 @@ Multi-clinic appointment discovery and booking. This is a student pilot prototyp
 - New clinic profiles stay private until an administrator approves them. Admin sign-in is configured with environment variables.
 - Patients can create accounts to request appointments with approved ClinicConnect partners. Requests are visible to the patient, that clinic and the administrator; they are not sent by email or WhatsApp yet.
 - Passwords are hashed with Node's scrypt; the app uses signed HTTP-only, same-site cookies, login throttling and role-based data scoping.
-- Browser speech-to-text input for English (India) and Kannada, with a simple bilingual rules fallback.
+- Browser speech-to-text input for English (India), Hindi and Kannada, with a local multilingual rules fallback for common appointment requests.
+- Common acne/pimple wording in English and Hindi can suggest Dermatology; the assistant does not diagnose. The user confirms the suggested service before the clinic search applies it.
+- Patients can type an area, choose a listed area, or select Any area. This prototype uses that area field rather than device GPS for nearby results.
 - Optional OpenAI request matching through the Responses API. It is only enabled when the server has a key, and the patient must opt in before their text is sent. It suggests a service for the patient to confirm; it does not diagnose, check availability, or book.
 - Sample bookings remain available for the classroom demo. MongoDB Atlas persistence can be enabled with `MONGODB_URI`; a replica set is required for atomic slot reservations.
 - Live directory results are public OpenStreetMap data and may be incomplete or outdated. Do not enter real patient or health information into the prototype until the remaining privacy, operational and deployment work is complete.
@@ -50,6 +52,7 @@ npm start         # Start the API (for a separately served frontend)
 - The current admin approval is an internal status toggle; it does not verify clinic registration, licenses or staff identity against official records.
 - Account email verification and password recovery are not connected. Clinic and patient accounts are suitable for a controlled prototype only.
 - Clinic schedules currently use a set of daily times and open weekdays. Appointment duration, breaks, holidays, doctor-level capacity and rescheduling rules still need implementation.
+- Partner appointment requests require a patient account and an available clinic slot on the selected date. Admin and clinic accounts do not book as patients.
 - Booking notifications, patient cancellation, reminders, audit history and operational support are not connected.
 - WhatsApp Cloud API and voice-note ingestion are not connected. Browser voice input is not WhatsApp voice-note integration.
 - OpenStreetMap listings are not ClinicConnect partners and cannot be booked. Sample profiles and times are synthetic.

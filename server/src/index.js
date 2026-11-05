@@ -389,13 +389,13 @@ async function interpretWithOpenAI(message, language) {
     body: JSON.stringify({
       model,
       store: false,
-      instructions: `You help route appointment requests to clinic services. This is not medical advice. Never diagnose, recommend treatment, or infer a condition. Use only these service labels: ENT, Dentistry, Dermatology, General medicine. Suggest a service only when the user's own words clearly identify a relevant body area or explicitly name the service; otherwise use null. Extract an area only when explicitly named from: Indiranagar, Koramangala, Whitefield. Detect if date and time preference are present. Reply in ${language === 'kn' ? 'Kannada' : 'English'}, briefly and neutrally. Ask the user to confirm any suggested service. Do not claim a booking is made or that slots are available.`,
+      instructions: `You help route appointment requests to clinic services. This is not medical advice. Never diagnose, recommend treatment, or infer a condition. Use only these service labels: ENT, Dentistry, Dermatology, General medicine. Suggest a service only when the user's own words clearly identify a relevant body area or explicitly name the service; for example acne or pimples can map to Dermatology. Otherwise use null. Extract an area only when explicitly named by the user; never guess a location from "near me". Detect if date and time preference are present. Reply in ${language === 'kn' ? 'Kannada' : language === 'hi' ? 'Hindi' : 'English'}, briefly and neutrally. Ask the user to confirm any suggested service. Do not claim a booking is made or that slots are available.`,
       input: [{ role: 'user', content: message }],
       text: { format: { type: 'json_schema', name: 'booking_intent', strict: true, schema: {
         type: 'object', additionalProperties: false,
         properties: {
           suggestedService: { type: ['string', 'null'], enum: ['ENT', 'Dentistry', 'Dermatology', 'General medicine', null] },
-          area: { type: ['string', 'null'], enum: ['Indiranagar', 'Koramangala', 'Whitefield', null] },
+          area: { type: ['string', 'null'], maxLength: 80 },
           dateMentioned: { type: 'boolean' },
           timeMentioned: { type: 'boolean' },
           message: { type: 'string' },
@@ -411,11 +411,11 @@ async function interpretWithOpenAI(message, language) {
   if (!output) throw new Error('AI provider returned no structured result')
   const parsed = JSON.parse(output)
   const services = ['ENT', 'Dentistry', 'Dermatology', 'General medicine']
-  const areas = ['Indiranagar', 'Koramangala', 'Whitefield']
+  const mentionedArea = typeof parsed.area === 'string' && message.toLocaleLowerCase().includes(parsed.area.toLocaleLowerCase()) ? parsed.area.trim().slice(0, 80) : null
   return {
     source: 'openai',
     suggestedService: services.includes(parsed.suggestedService) ? parsed.suggestedService : null,
-    area: areas.includes(parsed.area) ? parsed.area : null,
+    area: mentionedArea,
     missing: [!parsed.dateMentioned && 'date', !parsed.timeMentioned && 'time'].filter(Boolean),
     message: typeof parsed.message === 'string' ? parsed.message.slice(0, 500) : 'Please confirm the service and preferred appointment details.',
   }
@@ -424,8 +424,9 @@ async function interpretWithOpenAI(message, language) {
 app.post('/api/assistant/interpret', async (request, response) => {
   const message = typeof request.body?.message === 'string' ? request.body.message.trim().slice(0, 500) : ''
   if (!message) return response.status(400).json({ error: 'Add a short description of what you are looking for.' })
+  const language = /[\u0900-\u097F]/.test(message) ? 'hi' : /[\u0C80-\u0CFF]/.test(message) ? 'kn' : request.body?.language
   if (request.body?.allowAi === true && process.env.OPENAI_API_KEY) {
-    try { return response.json(await interpretWithOpenAI(message, request.body?.language)) }
+    try { return response.json(await interpretWithOpenAI(message, language)) }
     catch (error) {
       console.error('AI intent request failed:', error.message)
       return response.status(502).json({ error: 'AI matching is temporarily unavailable. Turn off AI matching or try again later.' })
@@ -436,19 +437,23 @@ app.post('/api/assistant/interpret', async (request, response) => {
   const mappings = [
     { keys: ['ear', 'nose', 'throat', 'hearing', 'ಕಿವಿ', 'ಮೂಗು', 'ಗಂಟಲು', 'ಕಿವಿನೋವು'], service: 'ENT', label: 'ear, nose or throat concern' },
     { keys: ['tooth', 'teeth', 'dent', 'gum', 'ಹಲ್ಲು', 'ದಂತ', 'ಹಲ್ಲುನೋವು'], service: 'Dentistry', label: 'dental appointment' },
-    { keys: ['skin', 'rash', 'acne', 'hair', 'ಚರ್ಮ', 'ದದ್ದು', 'ಮೊಡವೆ'], service: 'Dermatology', label: 'skin or hair appointment' },
+    { keys: ['skin', 'rash', 'acne', 'pimple', 'pimples', 'face acne', 'facial acne', 'hair', 'मुंहासे', 'मुहांसे', 'मुंहासा', 'दाने', 'दाना', 'त्वचा', 'चेहरे पर दाने', 'चेहरे पर मुंहासे', 'muhase', 'muhase', 'daane', 'daana', 'chehre par dane', 'chehre par muhase', 'ಚರ್ಮ', 'ದದ್ದು', 'ಮೊಡವೆ'], service: 'Dermatology', label: 'skin or hair appointment' },
     { keys: ['general doctor', 'general medicine', 'check-up', 'checkup', 'ಸಾಮಾನ್ಯ ವೈದ್ಯ'], service: 'General medicine', label: 'general consultation' },
   ]
   const match = mappings.find((item) => item.keys.some((key) => text.includes(key)))
-  const dateMentioned = /\b(today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i.test(text) || /ಇಂದು|ನಾಳೆ|ಸೋಮವಾರ|ಮಂಗಳವಾರ|ಬುಧವಾರ|ಗುರುವಾರ|ಶುಕ್ರವಾರ|ಶನಿವಾರ|ಭಾನುವಾರ/.test(text)
-  const timeMentioned = /\b(morning|afternoon|evening|\d{1,2}(:\d{2})?\s?(am|pm))\b/i.test(text) || /ಬೆಳಗ್ಗೆ|ಮಧ್ಯಾಹ್ನ|ಸಂಜೆ/.test(text)
-  const kannada = request.body?.language === 'kn'
+  const dateMentioned = /\b(today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i.test(text) || /आज|कल|सोमवार|मंगलवार|बुधवार|गुरुवार|शुक्रवार|शनिवार|रविवार|ಇಂದು|ನಾಳೆ|ಸೋಮವಾರ|ಮಂಗಳವಾರ|ಬುಧವಾರ|ಗುರುವಾರ|ಶುಕ್ರವಾರ|ಶನಿವಾರ|ಭಾನುವಾರ/.test(text)
+  const timeMentioned = /\b(morning|afternoon|evening|\d{1,2}(:\d{2})?\s?(am|pm))\b/i.test(text) || /सुबह|दोपहर|शाम|ಬೆಳಗ್ಗೆ|ಮಧ್ಯಾಹ್ನ|ಸಂಜೆ/.test(text)
+  const kannada = language === 'kn'
+  const hindi = language === 'hi'
+  const mentionedArea = ['Koramangala', 'Indiranagar', 'Whitefield', 'Greater Noida'].find((item) => text.includes(item.toLowerCase())) || null
   response.json({
     source: 'demo-rules',
     suggestedService: match?.service || null,
-    area: /koramangala/i.test(text) ? 'Koramangala' : /indiranagar/i.test(text) ? 'Indiranagar' : null,
+    area: mentionedArea,
     missing: [!dateMentioned && 'date', !timeMentioned && 'time'].filter(Boolean),
-    message: kannada
+    message: hindi
+      ? (match ? `आपके अनुरोध से ${match.service} सेवा मेल खा सकती है। यह निदान नहीं है। क्लिनिक खोजने से पहले कृपया इस सेवा की पुष्टि करें।` : 'मैं इस विवरण से कोई क्लिनिक सेवा सुरक्षित रूप से नहीं चुन सका। सेवा चुनें या खोज फ़िल्टर का उपयोग करें।')
+      : kannada
       ? (match ? `ನಿಮ್ಮ ವಿವರಣೆಗೆ ${match.service} ಸೇವೆ ಹೊಂದಿರಬಹುದು. ಮುಂದುವರಿಯುವ ಮೊದಲು ಈ ಸೇವೆಯನ್ನು ದೃಢೀಕರಿಸಿ.` : 'ಈ ವಿವರಣೆಗೆ ಸರಿಯಾದ ಸೇವೆಯನ್ನು ಖಚಿತಪಡಿಸಲು ಸಾಧ್ಯವಾಗಲಿಲ್ಲ. ಸೇವೆಯ ಹೆಸರನ್ನು ಪ್ರಯತ್ನಿಸಿ ಅಥವಾ ಕ್ಲಿನಿಕ್ ಹುಡುಕಾಟ ಬಳಸಿ.')
       : match
         ? `I found wording that may match ${match.label === 'ear, nose or throat concern' ? 'an' : 'a'} ${match.label}. I can show clinics that list ${match.service}; please confirm that this is the service you want to book.`

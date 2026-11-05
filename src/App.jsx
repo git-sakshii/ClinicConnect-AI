@@ -8,7 +8,7 @@ import {
 import './App.css'
 
 const iconMap = { Dermatology: Activity, Dentistry: HeartPulse, ENT: Activity, 'General medicine': Stethoscope }
-const quickPrompts = ['I have ear pain', 'Find a dentist tomorrow', 'Skin doctor near Indiranagar']
+const quickPrompts = ['I have acne on my face', 'मुझे चेहरे पर मुंहासे हैं', 'Find a dentist tomorrow']
 
 function dayLabel(date) {
   return new Intl.DateTimeFormat('en-IN', { weekday: 'short', day: 'numeric' }).format(date)
@@ -29,7 +29,7 @@ function App() {
   const [activeView, setActiveView] = useState('discover')
   const [selectedDay, setSelectedDay] = useState(nextDays()[0].key)
   const [query, setQuery] = useState('')
-  const [area, setArea] = useState('Indiranagar')
+  const [area, setArea] = useState('Any area')
   const [directorySource, setDirectorySource] = useState('osm')
   const [liveSearch, setLiveSearch] = useState(null)
   const [savedClinics, setSavedClinics] = useState(() => new Set(JSON.parse(localStorage.getItem('clinicconnect:saved') || '[]')))
@@ -45,6 +45,7 @@ function App() {
   const [refreshKey, setRefreshKey] = useState(0)
   const [bookingClinic, setBookingClinic] = useState(null)
   const [bookingSlot, setBookingSlot] = useState('')
+  const [bookingService, setBookingService] = useState('')
   const [patientName, setPatientName] = useState('')
   const [patientPhone, setPatientPhone] = useState('')
   const [bookingState, setBookingState] = useState('idle')
@@ -129,6 +130,8 @@ function App() {
   async function askAssistant(prompt = assistantText) {
     const clean = prompt.trim()
     if (!clean) return
+    if (/[\u0900-\u097F]/.test(clean)) setLanguage('hi')
+    else if (/[\u0C80-\u0CFF]/.test(clean)) setLanguage('kn')
     setAssistantText(clean)
     setAssistantResult(null)
     setIsThinking(true)
@@ -148,11 +151,31 @@ function App() {
     }
   }
 
+  function useSuggestedService() {
+    const suggested = assistantResult?.suggestedService
+    if (!suggested) return
+    setQuery('')
+    setService(suggested)
+    if (directorySource === 'osm') setLiveSearch({ query: '', area, service: suggested, requestedAt: Date.now() })
+    const selectedArea = area && area !== 'Any area'
+    const broadArea = language === 'hi'
+      ? directorySource === 'osm' ? 'बेंगलुरु' : 'सभी स्वीकृत क्लिनिक क्षेत्रों'
+      : language === 'kn'
+        ? directorySource === 'osm' ? 'ಬೆಂಗಳೂರು' : 'ಎಲ್ಲಾ ಅನುಮೋದಿತ ಕ್ಲಿನಿಕ್ ಪ್ರದೇಶಗಳು'
+        : directorySource === 'osm' ? 'Bengaluru' : 'all approved partner areas'
+    const nextMessage = language === 'hi'
+      ? `मैं ${selectedArea ? `${area} के पास` : broadArea} में ${suggested} सेवा वाले क्लिनिक खोज रहा हूँ। नज़दीकी परिणामों के लिए ऊपर के क्षेत्र फ़ील्ड में अपना क्षेत्र चुनें।`
+      : language === 'kn'
+        ? `${selectedArea ? `${area} ಹತ್ತಿರ` : broadArea} ${suggested} ಸೇವೆಯ ಕ್ಲಿನಿಕ್‌ಗಳನ್ನು ಹುಡುಕುತ್ತಿದ್ದೇನೆ. ಹತ್ತಿರದ ಫಲಿತಾಂಶಗಳಿಗೆ ಮೇಲಿನ ಪ್ರದೇಶದ ಫೀಲ್ಡ್‌ನಲ್ಲಿ ನಿಮ್ಮ ಪ್ರದೇಶವನ್ನು ಆರಿಸಿ.`
+        : `Searching for clinics that list ${suggested} ${selectedArea ? `near ${area}` : `in ${broadArea}`}. For closer results, enter your area in the area field.`
+    setAssistantResult((current) => ({ ...current, message: nextMessage }))
+  }
+
   function listenForRequest() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
     if (!SpeechRecognition) { setToast('Voice input is not available in this browser. Try Chrome or type your request.'); return }
     const recognition = new SpeechRecognition()
-    recognition.lang = language === 'kn' ? 'kn-IN' : 'en-IN'
+    recognition.lang = language === 'kn' ? 'kn-IN' : language === 'hi' ? 'hi-IN' : 'en-IN'
     recognition.interimResults = false
     recognition.maxAlternatives = 1
     recognition.onstart = () => setIsListening(true)
@@ -165,6 +188,7 @@ function App() {
   function openBooking(clinic, slot) {
     setBookingClinic(clinic)
     setBookingSlot(slot)
+    setBookingService(clinic.services.includes(service) ? service : clinic.services[0])
     setBookingState('idle')
   }
 
@@ -176,7 +200,7 @@ function App() {
       const response = await fetch('/api/appointments', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          clinicId: bookingClinic.id, service: service === 'All services' ? bookingClinic.services[0] : service,
+          clinicId: bookingClinic.id, service: bookingService,
           date: selectedDay, time: bookingSlot, patientName: patientName.trim(), phone: patientPhone.trim(),
         }),
       })
@@ -246,7 +270,7 @@ function App() {
           <div className="breadcrumb">Patient workspace <span>/</span> <strong>{navigation.find((item) => item.id === activeView)?.label}</strong></div>
           <div className="top-actions">
             <span className={`demo-pill ${directorySource !== 'demo' ? 'live-pill' : ''}`}><span /> {directorySource === 'osm' ? 'OPENSTREETMAP' : directorySource === 'partners' ? 'PARTNER CLINICS' : 'SAMPLE DATA'}</span>
-            <button className="language-button" onClick={() => setLanguage((current) => current === 'en' ? 'kn' : 'en')} aria-label="Switch voice language"><Languages size={16} /> {language === 'en' ? 'English' : 'ಕನ್ನಡ'} <ChevronDown size={14} /></button>
+            <button className="language-button" onClick={() => setLanguage((current) => current === 'en' ? 'hi' : current === 'hi' ? 'kn' : 'en')} aria-label="Switch assistant language"><Languages size={16} /> {language === 'en' ? 'English' : language === 'hi' ? 'हिन्दी' : 'ಕನ್ನಡ'} <ChevronDown size={14} /></button>
             <button className="top-avatar" aria-label="Open account and clinic portal" title={account?.email || 'Sign in'} onClick={() => setActiveView('clinic')}>{account?.email?.slice(0, 2).toUpperCase() || 'SS'}</button>
           </div>
         </header>
@@ -265,14 +289,14 @@ function App() {
             <section className="search-panel" aria-label="Clinic search">
               <label className="search-input-wrap"><Search size={19} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={directorySource === 'osm' ? 'Filter by clinic name' : 'Search a clinic, service, or concern'} /></label>
               <span className="search-divider" />
-              <label className="search-select"><MapPin size={18} /><select value={area} onChange={(event) => setArea(event.target.value)}><option>Indiranagar</option><option>Koramangala</option><option>Whitefield</option><option>Any area</option></select><ChevronDown size={14} /></label>
+              <label className="search-select"><MapPin size={18} /><input list="clinicconnect-areas" value={area} onChange={(event) => setArea(event.target.value)} aria-label="Area" placeholder="Type an area" /><datalist id="clinicconnect-areas"><option value="Indiranagar" /><option value="Koramangala" /><option value="Whitefield" /><option value="Greater Noida" /><option value="Any area" /></datalist><ChevronDown size={14} /></label>
               <button className="search-submit" onClick={() => directorySource === 'osm' ? setLiveSearch({ query, area, service, requestedAt: Date.now() }) : setRefreshKey((value) => value + 1)}>Search clinics <ArrowRight size={16} /></button>
             </section>
 
             <div className="content-grid">
               <section className="results-column">
                 <div className="section-head">
-                  <div><h2>Clinics around you</h2><p>{directorySource === 'osm' ? 'OpenStreetMap listings · contact clinics to confirm details and appointments' : directorySource === 'partners' ? 'Approved clinics · times entered by clinic operators' : 'Sample profiles · availability shown for your selected day'}</p></div>
+                  <div><h2>{area && area !== 'Any area' ? `Clinics near ${area}` : 'Clinics in the directory'}</h2><p>{directorySource === 'osm' ? 'OpenStreetMap listings · contact clinics to confirm details and appointments' : directorySource === 'partners' ? 'Approved clinics · times entered by clinic operators' : 'Sample profiles · availability shown for your selected day'}</p></div>
                   <label className="service-filter"><span className="sr-only">Filter by service</span><select value={service} onChange={(event) => setService(event.target.value)}><option>All services</option><option>Dentistry</option><option>ENT</option><option>Dermatology</option><option>General medicine</option><option>Clinic</option></select><ChevronDown size={14} /></label>
                 </div>
                 <div className="directory-toolbar">
@@ -288,7 +312,7 @@ function App() {
 
                 <div className="clinic-list">
                   {displayedClinics.map((clinic) => <ClinicCard key={clinic.id} clinic={clinic} onBook={openBooking} saved={savedClinics.has(clinic.id)} onSave={() => setSavedClinics((current) => { const next = new Set(current); if (next.has(clinic.id)) { next.delete(clinic.id) } else { next.add(clinic.id) } localStorage.setItem('clinicconnect:saved', JSON.stringify([...next])); return next })} />)}
-                  {displayedClinics.length === 0 && <div className="empty-state"><Search size={22} /><strong>{directoryError ? 'Live listings could not be loaded' : directorySource === 'osm' && !liveSearch ? 'Search OpenStreetMap listings' : 'No matching clinics yet'}</strong><span>{directoryError ? directoryError : 'Try a clinic or speciality in Indiranagar, Koramangala or Whitefield. Public map data may have gaps.'}</span></div>}
+                  {displayedClinics.length === 0 && <div className="empty-state"><Search size={22} /><strong>{directoryError ? 'Live listings could not be loaded' : directorySource === 'osm' && !liveSearch ? 'Search OpenStreetMap listings' : 'No matching clinics yet'}</strong><span>{directoryError ? directoryError : directorySource === 'partners' ? 'Check the clinic name, area, selected service, and date. Approved partners can only be booked when they have slots for that day.' : 'Try a clinic or speciality in the selected area. Public map data may have gaps.'}</span>{directorySource === 'partners' && !directoryError && <button className="text-button" onClick={() => { setQuery(''); setArea('Any area'); setService('All services') }}>Show all approved partners</button>}</div>}
                 </div>
                 <div className="safety-note"><ShieldCheck size={16} /><span>{directorySource === 'osm' ? <>Listing details © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a>. Listings can be incomplete; verify with providers directly. ClinicConnect does not diagnose or provide treatment advice.</> : 'ClinicConnect helps with appointment booking. It does not diagnose or provide treatment advice.'}</span></div>
               </section>
@@ -298,11 +322,11 @@ function App() {
                   <div className="assistant-head"><div className="assistant-icon"><Sparkles size={19} /></div><div><h2>Booking assistant</h2><span><i /> Ready to help</span></div><button className="more-button" aria-label="Assistant options">•••</button></div>
                   <div className="assistant-rule" />
                   <div className="bot-message"><div className="bot-avatar"><Sparkles size={14} /></div><div><span className="message-time">JUST NOW</span><p>Hi Sakshi! Tell me what you’re looking for in your own words. You can describe a concern, service, or preferred time.</p></div></div>
-                  {assistantResult && <div className="assistant-response"><span className="response-label">{assistantResult.source === 'demo-rules' ? 'BOOKING SUGGESTION' : 'ASSISTANT'}</span><p>{assistantResult.message}</p>{assistantResult.suggestedService && <div className="suggested-service"><Stethoscope size={15} /><span>Suggested service</span><strong>{assistantResult.suggestedService}</strong><button onClick={() => { setService(assistantResult.suggestedService); setAssistantResult({ ...assistantResult, message: `Showing clinic profiles that list ${assistantResult.suggestedService}. Please confirm this service matches what you want to book.` }) }}>Use this</button></div>}</div>}
+                  {assistantResult && <div className="assistant-response"><span className="response-label">{assistantResult.source === 'demo-rules' ? 'BOOKING SUGGESTION' : 'ASSISTANT'}</span><p>{assistantResult.message}</p>{assistantResult.suggestedService && <div className="suggested-service"><Stethoscope size={15} /><span>Suggested service</span><strong>{assistantResult.suggestedService}</strong><button onClick={useSuggestedService}>{language === 'hi' ? 'क्लिनिक खोजें' : language === 'kn' ? 'ಕ್ಲಿನಿಕ್ ಹುಡುಕಿ' : 'Search clinics'}</button></div>}</div>}
                   <div className="prompt-label">TRY ASKING</div>
                   <div className="quick-prompts">{quickPrompts.map((prompt) => <button key={prompt} onClick={() => askAssistant(prompt)}>{prompt}<ArrowUpRight size={13} /></button>)}</div>
-                  <div className="assistant-compose"><textarea value={assistantText} onChange={(event) => setAssistantText(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); askAssistant() } }} placeholder={language === 'kn' ? 'ನಿಮಗೆ ಏನು ಬೇಕು ಎಂದು ಹೇಳಿ…' : 'Describe what you’re looking for…'} rows={2} aria-label="Describe what you need" /><div className="compose-actions"><span><AudioLines size={15} /> {isListening ? 'Listening…' : `Voice input · ${language === 'en' ? 'English' : 'ಕನ್ನಡ'}`}</span><button className="voice-button" onClick={listenForRequest} disabled={isListening} aria-label="Speak your request"><Mic size={16} /></button><button disabled={isThinking || !assistantText.trim()} onClick={() => askAssistant()} aria-label="Send message">{isThinking ? <span className="spinner" /> : <ArrowRight size={17} />}</button></div></div>
-                  <div className="assistant-disclaimer">{aiEnabled && aiConsent ? 'AI matching is on. Your text transcript is sent to OpenAI for request matching; it is not used to diagnose or provide treatment advice.' : 'Basic matching runs on this app. No AI provider receives your request unless you opt in below.'} Voice audio is handled by your browser speech service; this app receives the resulting text.</div>
+                  <div className="assistant-compose"><textarea value={assistantText} onChange={(event) => setAssistantText(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); askAssistant() } }} placeholder={language === 'kn' ? 'ನಿಮಗೆ ಏನು ಬೇಕು ಎಂದು ಹೇಳಿ…' : language === 'hi' ? 'आप क्या खोज रहे हैं, बताइए…' : 'Describe what you’re looking for…'} rows={2} aria-label="Describe what you need" /><div className="compose-actions"><span><AudioLines size={15} /> {isListening ? 'Listening…' : `Voice input · ${language === 'en' ? 'English' : language === 'hi' ? 'हिन्दी' : 'ಕನ್ನಡ'}`}</span><button className="voice-button" onClick={listenForRequest} disabled={isListening} aria-label="Speak your request"><Mic size={16} /></button><button disabled={isThinking || !assistantText.trim()} onClick={() => askAssistant()} aria-label="Send message">{isThinking ? <span className="spinner" /> : <ArrowRight size={17} />}</button></div></div>
+                  <div className="assistant-disclaimer">{aiEnabled && aiConsent ? 'AI matching is on. Your text transcript is sent to OpenAI for request matching; it is not used to diagnose or provide treatment advice.' : 'Basic English/Hindi/Kannada matching runs on this app. No AI provider receives your request unless you opt in below.'} Nearby search uses the area field; this prototype does not read your device location. Voice audio is handled by your browser speech service; this app receives the resulting text.</div>
                   {aiEnabled && <label className="ai-consent"><input type="checkbox" checked={aiConsent} onChange={(event) => setAiConsent(event.target.checked)} /> Use AI matching (sends this text request to OpenAI)</label>}
                 </div>
                 <div className="whatsapp-card"><div className="whatsapp-badge"><MessageCircle size={18} /></div><div><strong>Prefer to talk?</strong><span>WhatsApp voice booking is on our roadmap.</span></div><ArrowRight size={16} /></div>
@@ -315,7 +339,7 @@ function App() {
         {activeView === 'clinic' && <ClinicPage appointments={appointments} onUpdate={updateAppointment} account={account} setAccount={setAccount} />}
       </main>
 
-      {bookingClinic && <BookingModal clinic={bookingClinic} slot={bookingSlot} day={selectedDay} name={patientName} phone={patientPhone} setName={setPatientName} setPhone={setPatientPhone} state={bookingState} account={account} setAccount={setAccount} onPatientName={setPatientName} onSubmit={submitBooking} onClose={() => { setBookingClinic(null); setBookingState('idle') }} onRetry={() => setBookingState('idle')} />}
+      {bookingClinic && <BookingModal clinic={bookingClinic} slot={bookingSlot} day={selectedDay} service={bookingService} setService={setBookingService} name={patientName} phone={patientPhone} setName={setPatientName} setPhone={setPatientPhone} state={bookingState} account={account} setAccount={setAccount} onPatientName={setPatientName} onSubmit={submitBooking} onClose={() => { setBookingClinic(null); setBookingState('idle') }} onRetry={() => setBookingState('idle')} />}
       {toast && <div className="toast" role="status"><Check size={16} />{toast}<button onClick={() => setToast('')} aria-label="Dismiss notification"><X size={15} /></button></div>}
     </div>
   )
@@ -330,13 +354,13 @@ function ClinicCard({ clinic, onBook, saved, onSave }) {
         <div className="clinic-title-row"><div><div className="clinic-tags"><span className="verified"><ShieldCheck size={12} /> {clinic.source === 'OpenStreetMap' ? 'OSM LISTING' : clinic.source === 'partner' ? 'APPROVED PARTNER' : 'SAMPLE PROFILE'}</span>{clinic.languages?.map((language) => <span key={language} className="language-tag">{language}</span>)}</div><h3>{clinic.name}</h3><p className="clinic-location"><MapPin size={14} /> {clinic.area} <span>·</span> {clinic.address}</p></div><button className={`favorite-button ${saved ? 'saved' : ''}`} aria-label={`${saved ? 'Unsave' : 'Save'} ${clinic.name}`} onClick={onSave}>{saved ? '♥' : '♡'}</button></div>
         <p className="clinic-description">{clinic.description}</p>
         <div className="clinic-meta"><span><Clock3 size={14} /> {clinic.openingLabel}</span><span className="service-label"><Stethoscope size={14} /> {clinic.services.join(' · ')}</span></div>
-        {clinic.source === 'OpenStreetMap' ? <div className="real-data-actions">{clinic.phone && <a href={`tel:${clinic.phone}`}><MessageCircle size={13} /> {clinic.phone}</a>}{clinic.website && <a href={clinic.website} target="_blank" rel="noreferrer">Website <ArrowUpRight size={13} /></a>}<a href={clinic.mapsUrl} target="_blank" rel="noreferrer"><MapPin size={13} /> Directions</a></div> : <><div className="slot-row"><strong>Available times</strong><div className="slot-list">{clinic.slots.length ? clinic.slots.slice(0, 3).map((slot) => <button key={slot.time} onClick={() => onBook(clinic, slot.time)}>{slot.time}</button>) : <span className="no-slots">No slots on this day</span>}</div></div><button className="view-clinic" onClick={() => clinic.slots[0] && onBook(clinic, clinic.slots[0].time)}>Book first available <ArrowRight size={15} /></button></>}
+        {clinic.source === 'OpenStreetMap' ? <div className="real-data-actions">{clinic.phone && <a href={`tel:${clinic.phone}`}><MessageCircle size={13} /> {clinic.phone}</a>}{clinic.website && <a href={clinic.website} target="_blank" rel="noreferrer">Website <ArrowUpRight size={13} /></a>}<a href={clinic.mapsUrl} target="_blank" rel="noreferrer"><MapPin size={13} /> Directions</a></div> : <><div className="slot-row"><strong>Available times</strong><div className="slot-list">{clinic.slots.length ? clinic.slots.slice(0, 3).map((slot) => <button key={slot.time} onClick={() => onBook(clinic, slot.time)}>{slot.time}</button>) : <span className="no-slots">No slots on this day. Choose another date.</span>}</div></div><button className="view-clinic" disabled={!clinic.slots.length} onClick={() => clinic.slots[0] && onBook(clinic, clinic.slots[0].time)}>{clinic.slots.length ? <>Book first available <ArrowRight size={15} /></> : 'No appointments available'}</button></>}
       </div>
     </article>
   )
 }
 
-function BookingModal({ clinic, slot, day, name, phone, setName, setPhone, state, account, setAccount, onPatientName, onSubmit, onClose, onRetry }) {
+function BookingModal({ clinic, slot, day, service, setService, name, phone, setName, setPhone, state, account, setAccount, onPatientName, onSubmit, onClose, onRetry }) {
   const [accessMode, setAccessMode] = useState('register')
   const [accessName, setAccessName] = useState('')
   const [accessEmail, setAccessEmail] = useState('')
@@ -366,10 +390,11 @@ function BookingModal({ clinic, slot, day, name, phone, setName, setPhone, state
       <section className="booking-modal" role="dialog" aria-modal="true" aria-labelledby="booking-title">
         <div className="modal-top"><span className="modal-kicker"><CalendarDays size={15} /> APPOINTMENT REQUEST</span><button className="close-modal" onClick={onClose} aria-label="Close"><X size={19} /></button></div>
         {state === 'done' ? <div className="booking-success"><div className="success-mark"><Check size={28} /></div><div className="eyebrow">REQUEST SUBMITTED</div><h2 id="booking-title">You’re on your way.</h2><p>Your appointment request for <strong>{clinic.name}</strong> {partnerBooking ? 'was sent to the clinic.' : 'is in the sample clinic queue.'}</p><div className="booking-summary"><span>{date}</span><strong>{slot}</strong></div><p className="pending-note">Status: Pending clinic confirmation.{partnerBooking ? '' : ' This is sample data and no real clinic was contacted.'}</p><button className="primary-button full-button" onClick={onClose}>Done <ArrowRight size={16} /></button></div> : <>
-          <h2 id="booking-title">Request this appointment</h2><p className="modal-intro">{partnerBooking ? 'Sign in with a patient account to send a request to this clinic.' : 'We’ll share only the details needed for this sample booking.'}</p>
+          <h2 id="booking-title">Request this appointment</h2><p className="modal-intro">{partnerBooking ? account && account.role !== 'patient' ? `You’re signed in as ${account.role}. Use a separate patient account to request an appointment.` : 'Sign in with a patient account to send a request to this clinic.' : 'We’ll share only the details needed for this sample booking.'}</p>
           <div className="selected-clinic"><div className={`small-clinic-icon art-${clinic.accent}`}><Stethoscope size={18} /></div><div><strong>{clinic.name}</strong><span>{date} · {slot}</span></div></div>
           {state === 'conflict' && <div className="form-alert">That sample slot was just taken. Choose another available time.</div>}
           {state === 'error' && <div className="form-alert">We couldn’t submit the request. Please retry.</div>}
+          {clinic.services.length > 1 && <label className="booking-service">Service for this visit<select value={service} onChange={(event) => setService(event.target.value)}>{clinic.services.map((item) => <option key={item}>{item}</option>)}</select></label>}
           {partnerBooking && account?.role !== 'patient' ? <>
             <div className="auth-tabs"><button className={accessMode === 'register' ? 'selected' : ''} onClick={() => setAccessMode('register')}>Create account</button><button className={accessMode === 'login' ? 'selected' : ''} onClick={() => setAccessMode('login')}>Sign in</button></div>
             {accessError && <div className="form-alert">{accessError}</div>}
@@ -389,6 +414,10 @@ function BookingModal({ clinic, slot, day, name, phone, setName, setPhone, state
 }
 
 function AppointmentsPage({ appointments, account, onUpdate, onBrowse }) {
+  if (account && account.role !== 'patient') {
+    const roleLabel = account.role === 'clinic' ? 'clinic account' : 'platform administrator account'
+    return <div className="page-content secondary-page"><div className="eyebrow"><span className="eyebrow-line" /> YOUR SCHEDULE</div><h1>Patient appointments</h1><p className="welcome-sub">You’re signed in with a {roleLabel}. Clinic staff manage clinic requests in Clinic portal. To request and track a personal appointment, choose a clinic and use a patient account.</p><button className="primary-button" onClick={onBrowse}>Find a clinic <ArrowRight size={15} /></button></div>
+  }
   const label = account?.role === 'patient' ? 'Your partner clinic bookings are stored with your account.' : 'Sample data stored in this demo session.'
   return <div className="page-content secondary-page"><div className="eyebrow"><span className="eyebrow-line" /> YOUR SCHEDULE</div><h1>My appointments</h1><p className="welcome-sub">Track requests and see updates from clinics.</p><div className="secondary-panel"><div className="panel-heading"><div><h2>Appointment requests</h2><p>{label}</p></div><CalendarDays size={21} /></div>{appointments.length ? appointments.map((appointment) => <div className="appointment-row" key={appointment.id}><div className="appointment-date"><strong>{appointment.dateLabel}</strong><span>{appointment.time}</span></div><div className="appointment-info"><strong>{appointment.clinicName}</strong><span>{appointment.service} · {appointment.patientName}</span></div><span className={`status-chip status-${appointment.status.toLowerCase()}`}>{appointment.status}</span>{account?.role === 'patient' && appointment.source === 'partner' && ['Pending', 'Confirmed'].includes(appointment.status) && <button className="decline-button" onClick={() => onUpdate(appointment.id, 'Cancelled')}>Cancel</button>}</div>) : <div className="empty-state large-empty"><CalendarDays size={24} /><strong>No appointments yet</strong><span>When you submit a booking request, it will appear here.</span><button className="primary-button" onClick={onBrowse}>Find a clinic <ArrowRight size={15} /></button></div>}</div></div>
 }
