@@ -265,6 +265,11 @@ function App() {
     { id: 'clinic', label: 'Clinic portal', icon: Stethoscope },
   ]
   const viewLabels = { ...Object.fromEntries(navigation.map(({ id, label }) => [id, label])), account: 'Account & profile' }
+  const sidebarName = account?.name || account?.email || 'Guest mode'
+  const sidebarRole = account?.role === 'admin' ? 'Platform administrator' : account?.role === 'clinic' ? 'Clinic account' : account?.role === 'patient' ? 'Patient account' : 'Browsing without sign in'
+  const avatarInitials = account?.name
+    ? account.name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase()
+    : account?.email?.slice(0, 2).toUpperCase() || 'GU'
 
   return (
     <div className="app-shell">
@@ -289,7 +294,7 @@ function App() {
           <button onClick={() => setToast('Support contact will be added during setup.')}>Get support <ArrowRight size={14} /></button>
         </div>
         <div className="profile-mini">
-          <div className="avatar">SS</div><div className="profile-copy"><strong>Student preview</strong><span>Demo workspace</span></div>
+          <div className="avatar">{avatarInitials}</div><div className="profile-copy"><strong>{sidebarName}</strong><span>{sidebarRole}</span></div>
           <ChevronDown size={16} className="profile-chevron" />
         </div>
       </aside>
@@ -300,7 +305,7 @@ function App() {
           <div className="top-actions">
             <span className={`demo-pill ${directorySource !== 'demo' ? 'live-pill' : ''}`}><span /> {directorySource === 'osm' ? 'OPENSTREETMAP' : directorySource === 'partners' ? 'PARTNER CLINICS' : 'SAMPLE DATA'}</span>
             <button className="language-button" onClick={() => setLanguage((current) => current === 'en' ? 'hi' : current === 'hi' ? 'kn' : 'en')} aria-label="Switch assistant language"><Languages size={16} /> {language === 'en' ? 'English' : language === 'hi' ? 'हिन्दी' : 'ಕನ್ನಡ'} <ChevronDown size={14} /></button>
-            <button className="top-avatar" aria-label="Open account profile" title={account?.email || 'Account & profile'} onClick={() => setActiveView('account')}>{account?.email?.slice(0, 2).toUpperCase() || 'SS'}</button>
+            <button className="top-avatar" aria-label={account ? 'Open account profile' : 'Open guest profile'} title={account?.email || 'Guest account'} onClick={() => setActiveView('account')}>{avatarInitials}</button>
           </div>
         </header>
 
@@ -309,7 +314,7 @@ function App() {
             <section className="welcome-row">
               <div>
                 <div className="eyebrow"><span className="eyebrow-line" /> A CALMER WAY TO FIND CARE</div>
-                <h1>Good morning, Sakshi <span className="wave">✦</span></h1>
+                <h1>{account?.name ? `Good to see you, ${account.name}` : 'Find care near you'} <span className="wave">✦</span></h1>
                 <p className="welcome-sub">Tell us what you need. We’ll help you find a clinic and a time that works.</p>
               </div>
                 <div className="care-note"><ShieldCheck size={17} /><span>{directorySource === 'osm' ? 'Live public directory' : directorySource === 'partners' ? 'Approved ClinicConnect partners' : 'Sample directory'}</span></div>
@@ -321,7 +326,11 @@ function App() {
               <label className="search-select"><MapPin size={18} /><input list="clinicconnect-areas" value={area} onChange={(event) => setArea(event.target.value)} aria-label="Area" placeholder="Type an area" /><datalist id="clinicconnect-areas"><option value="Delhi NCR" /><option value="Greater Noida" /><option value="Noida" /><option value="Ghaziabad" /><option value="Delhi" /><option value="Gurugram" /><option value="Faridabad" /><option value="Indiranagar" /><option value="Koramangala" /><option value="Whitefield" /><option value="Any area" /></datalist><ChevronDown size={14} /></label>
               <button className="search-submit" onClick={() => directorySource === 'osm' ? setLiveSearch({ query, area, service, requestedAt: Date.now() }) : setRefreshKey((value) => value + 1)}>Search clinics <ArrowRight size={16} /></button>
             </section>
-            {directorySource === 'osm' && <p className="search-guidance">Choose an area and service, optionally add a clinic name, then search. OpenStreetMap listings show public location details; bookings are available only with approved clinic partners.</p>}
+            <p className="search-guidance">{directorySource === 'osm'
+              ? 'Search public map listings by area and service; a clinic name is optional. These listings do not include bookable slots.'
+              : directorySource === 'partners'
+                ? 'Search clinics registered and approved on ClinicConnect. Their published availability can be requested for booking.'
+                : 'Search sample clinics and sample appointment slots for the prototype. Sample bookings do not contact a real clinic.'}</p>
 
             <div className="content-grid">
               <section className="results-column">
