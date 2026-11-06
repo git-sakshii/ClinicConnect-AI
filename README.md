@@ -5,8 +5,8 @@ Multi-clinic appointment discovery and booking. This is a student pilot prototyp
 ## Current milestone
 
 - React + Vite patient discovery interface.
-- Express API with a live, user-triggered OpenStreetMap/Nominatim clinic search for Indiranagar, Koramangala and Whitefield, plus a clearly separated sample-data mode.
-- Live listings include OpenStreetMap links and map directions. The prototype does not invent live schedules, contact details or verification; contact a provider directly to confirm them.
+- Express API with user-triggered OpenStreetMap/Nominatim clinic searches, an interactive OSM map centered on Delhi NCR, and supported area searches for NCR and Bengaluru.
+- In OSM mode, search by area and service, with an optional clinic name. Results show public listings, map pins and any contact details available in OSM; they do not have booking slots or clinic verification. Bookings are only available with approved ClinicConnect partners.
 - Saved clinics persist in the browser using local storage.
 - Clinic operators can register, sign in, edit their clinic profile, set open weekdays and appointment times, and review their own booking requests.
 - New clinic profiles stay private until an administrator approves them. Admin sign-in is configured with environment variables.
@@ -17,7 +17,7 @@ Multi-clinic appointment discovery and booking. This is a student pilot prototyp
 - Patients can type an area, choose a listed area, or select Any area. This prototype uses that area field rather than device GPS for nearby results.
 - Optional OpenAI request matching through the Responses API. It is only enabled when the server has a key, and the patient must opt in before their text is sent. It suggests a service for the patient to confirm; it does not diagnose, check availability, or book.
 - Sample bookings remain available for the classroom demo. MongoDB Atlas persistence can be enabled with `MONGODB_URI`; a replica set is required for atomic slot reservations.
-- Live directory results are public OpenStreetMap data and may be incomplete or outdated. Do not enter real patient or health information into the prototype until the remaining privacy, operational and deployment work is complete.
+- Live directory results are public OpenStreetMap data and may be incomplete or outdated. The prototype uses OSM's public Nominatim and map tile services without an API key; comply with the [Nominatim usage policy](https://operations.osmfoundation.org/policies/nominatim/) and [tile usage policy](https://operations.osmfoundation.org/policies/tiles/). Do not enter real patient or health information into the prototype until the remaining privacy, operational and deployment work is complete.
 
 ## Requirements
 

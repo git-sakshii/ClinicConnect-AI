@@ -12,7 +12,14 @@ import './App.css'
 const iconMap = { Dermatology: Activity, Dentistry: HeartPulse, ENT: Activity, 'General medicine': Stethoscope }
 const quickPrompts = ['I have acne on my face', 'मुझे चेहरे पर मुंहासे हैं', 'Find a dentist tomorrow']
 const areaMapCenters = {
-  'Any area': [12.9716, 77.5946],
+  'Any area': [28.6139, 77.209],
+  'Delhi NCR': [28.55, 77.25],
+  'Greater Noida': [28.4744, 77.504],
+  Noida: [28.5355, 77.391],
+  Ghaziabad: [28.6692, 77.4538],
+  Delhi: [28.6139, 77.209],
+  Gurugram: [28.4595, 77.0266],
+  Faridabad: [28.4089, 77.3178],
   Indiranagar: [12.9784, 77.6408],
   Koramangala: [12.9352, 77.6245],
   Whitefield: [12.9698, 77.75],
@@ -175,10 +182,10 @@ function App() {
     if (directorySource === 'osm') setLiveSearch({ query: '', area, service: suggested, requestedAt: Date.now() })
     const selectedArea = area && area !== 'Any area'
     const broadArea = language === 'hi'
-      ? directorySource === 'osm' ? 'बेंगलुरु' : 'सभी स्वीकृत क्लिनिक क्षेत्रों'
+      ? directorySource === 'osm' ? 'दिल्ली NCR' : 'सभी स्वीकृत क्लिनिक क्षेत्रों'
       : language === 'kn'
-        ? directorySource === 'osm' ? 'ಬೆಂಗಳೂರು' : 'ಎಲ್ಲಾ ಅನುಮೋದಿತ ಕ್ಲಿನಿಕ್ ಪ್ರದೇಶಗಳು'
-        : directorySource === 'osm' ? 'Bengaluru' : 'all approved partner areas'
+        ? directorySource === 'osm' ? 'ದೆಹಲಿ NCR' : 'ಎಲ್ಲಾ ಅನುಮೋದಿತ ಕ್ಲಿನಿಕ್ ಪ್ರದೇಶಗಳು'
+        : directorySource === 'osm' ? 'Delhi NCR' : 'all approved partner areas'
     const nextMessage = language === 'hi'
       ? `मैं ${selectedArea ? `${area} के पास` : broadArea} में ${suggested} सेवा वाले क्लिनिक खोज रहा हूँ। नज़दीकी परिणामों के लिए ऊपर के क्षेत्र फ़ील्ड में अपना क्षेत्र चुनें।`
       : language === 'kn'
@@ -309,11 +316,12 @@ function App() {
             </section>
 
             <section className="search-panel" aria-label="Clinic search">
-              <label className="search-input-wrap"><Search size={19} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={directorySource === 'osm' ? 'Filter by clinic name' : 'Search a clinic, service, or concern'} /></label>
+              <label className="search-input-wrap"><Search size={19} /><input value={query} maxLength={100} onChange={(event) => setQuery(event.target.value)} placeholder={directorySource === 'osm' ? 'Clinic name (optional)' : 'Search a clinic, service, or concern'} /></label>
               <span className="search-divider" />
-              <label className="search-select"><MapPin size={18} /><input list="clinicconnect-areas" value={area} onChange={(event) => setArea(event.target.value)} aria-label="Area" placeholder="Type an area" /><datalist id="clinicconnect-areas"><option value="Indiranagar" /><option value="Koramangala" /><option value="Whitefield" /><option value="Greater Noida" /><option value="Any area" /></datalist><ChevronDown size={14} /></label>
+              <label className="search-select"><MapPin size={18} /><input list="clinicconnect-areas" value={area} onChange={(event) => setArea(event.target.value)} aria-label="Area" placeholder="Type an area" /><datalist id="clinicconnect-areas"><option value="Delhi NCR" /><option value="Greater Noida" /><option value="Noida" /><option value="Ghaziabad" /><option value="Delhi" /><option value="Gurugram" /><option value="Faridabad" /><option value="Indiranagar" /><option value="Koramangala" /><option value="Whitefield" /><option value="Any area" /></datalist><ChevronDown size={14} /></label>
               <button className="search-submit" onClick={() => directorySource === 'osm' ? setLiveSearch({ query, area, service, requestedAt: Date.now() }) : setRefreshKey((value) => value + 1)}>Search clinics <ArrowRight size={16} /></button>
             </section>
+            {directorySource === 'osm' && <p className="search-guidance">Choose an area and service, optionally add a clinic name, then search. OpenStreetMap listings show public location details; bookings are available only with approved clinic partners.</p>}
 
             <div className="content-grid">
               <section className="results-column">
@@ -326,7 +334,7 @@ function App() {
                   <span>{savedClinics.size} saved</span>
                 </div>
                 {directorySource === 'osm' && <section className="map-panel" aria-label="OpenStreetMap clinic map">
-                  <div className="map-heading"><div><strong>Clinic map</strong><span>{clinics.length ? `${clinics.length} public listing${clinics.length === 1 ? '' : 's'} shown` : liveSearch ? 'No matching map pins for this search' : `Map centered on ${area === 'Any area' ? 'Bengaluru' : area}`}</span></div><MapPin size={17} /></div>
+                  <div className="map-heading"><div><strong>Clinic map</strong><span>{clinics.length ? `${clinics.length} public listing${clinics.length === 1 ? '' : 's'} shown` : liveSearch ? 'No matching map pins for this search' : `Map centered on ${!area || area === 'Any area' ? 'Delhi NCR' : area}`}</span></div><MapPin size={17} /></div>
                   <ClinicMap clinics={clinics} area={area} />
                 </section>}
                 {directoryError && <div className="directory-alert" role="status">{directoryError}</div>}
@@ -338,7 +346,7 @@ function App() {
 
                 <div className="clinic-list">
                   {displayedClinics.map((clinic) => <ClinicCard key={clinic.id} clinic={clinic} onBook={openBooking} saved={savedClinics.has(clinic.id)} onSave={() => setSavedClinics((current) => { const next = new Set(current); if (next.has(clinic.id)) { next.delete(clinic.id) } else { next.add(clinic.id) } localStorage.setItem('clinicconnect:saved', JSON.stringify([...next])); return next })} />)}
-                  {displayedClinics.length === 0 && <div className="empty-state"><Search size={22} /><strong>{directoryError ? 'Live listings could not be loaded' : directorySource === 'osm' && !liveSearch ? 'Search OpenStreetMap listings' : 'No matching clinics yet'}</strong><span>{directoryError ? directoryError : directorySource === 'partners' ? 'Check the clinic name, area, selected service, and date. Approved partners can only be booked when they have slots for that day.' : 'Try a clinic or speciality in the selected area. Public map data may have gaps.'}</span>{directorySource === 'partners' && !directoryError && <button className="text-button" onClick={() => { setQuery(''); setArea('Any area'); setService('All services') }}>Show all approved partners</button>}</div>}
+                  {displayedClinics.length === 0 && <div className="empty-state"><Search size={22} /><strong>{directoryError ? 'Live listings could not be loaded' : directorySource === 'osm' && !liveSearch ? 'Search OpenStreetMap listings' : directorySource === 'osm' ? 'No public listings match this search' : 'No matching clinics yet'}</strong><span>{directoryError ? directoryError : directorySource === 'partners' ? 'Check the clinic name, area, selected service, and date. Approved partners can only be booked when they have slots for that day.' : directorySource === 'osm' ? 'Public map coverage and specialty tags can be limited. Try All services, a nearby NCR area, or a clinic name.' : 'Try a clinic or speciality in the selected area.'}</span>{directorySource === 'partners' && !directoryError && <button className="text-button" onClick={() => { setQuery(''); setArea('Any area'); setService('All services') }}>Show all approved partners</button>}</div>}
                 </div>
                 <div className="safety-note"><ShieldCheck size={16} /><span>{directorySource === 'osm' ? <>Listing details © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a>. Listings can be incomplete; verify with providers directly. ClinicConnect does not diagnose or provide treatment advice.</> : 'ClinicConnect helps with appointment booking. It does not diagnose or provide treatment advice.'}</span></div>
               </section>
@@ -379,7 +387,7 @@ function MapViewport({ clinics, area }) {
     if (points.length) {
       map.fitBounds(points.map((clinic) => [clinic.latitude, clinic.longitude]), { padding: [24, 24], maxZoom: 14 })
     } else {
-      map.setView(areaMapCenters[area] || areaMapCenters['Any area'], 12)
+      map.setView(areaMapCenters[area] || areaMapCenters['Any area'], area === 'Delhi NCR' || area === 'Any area' ? 9 : 12)
     }
   }, [map, clinics, area])
   return null
@@ -389,7 +397,7 @@ function ClinicMap({ clinics, area }) {
   const points = clinics.filter((clinic) => Number.isFinite(clinic.latitude) && Number.isFinite(clinic.longitude))
   return (
     <div className="clinic-map">
-      <MapContainer center={areaMapCenters[area] || areaMapCenters['Any area']} zoom={12} scrollWheelZoom={false}>
+      <MapContainer center={areaMapCenters[area] || areaMapCenters['Any area']} zoom={area === 'Delhi NCR' || area === 'Any area' ? 9 : 12} scrollWheelZoom={false}>
         <MapViewport clinics={clinics} area={area} />
         <TileLayer url="https://tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>' />
         {points.map((clinic) => <Marker key={clinic.id} position={[clinic.latitude, clinic.longitude]}>

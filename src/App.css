@@ -58,6 +58,7 @@ h1,h2,h3 { font-family: 'Segoe UI Variable', 'Segoe UI', sans-serif; }
 .search-select>svg:last-child,.service-filter>svg { margin-left: -5px; color: #94a4af; pointer-events: none; }
 .search-submit,.primary-button { display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-height: 43px; padding: 0 17px; border: 0; border-radius: 9px; background: var(--navy); color: #fff; font-size: 11px; font-weight: 700; transition: .16s ease; }
 .search-submit:hover,.primary-button:hover { transform: translateY(-1px); background: #1b4664; box-shadow: 0 5px 13px #12304920; }
+.search-guidance { margin: 8px 3px 0; color: #7c8f9e; font-size: 10px; line-height: 1.5; }
 .content-grid { display: grid; grid-template-columns: minmax(0,1fr) 323px; align-items: start; gap: 23px; margin-top: 28px; }
 .section-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 14px; }
 .section-head h2,.panel-heading h2 { margin: 0 0 4px; color: var(--navy); font-size: 16px; font-weight: 750; letter-spacing: -.3px; }

@@ -43,10 +43,18 @@ memory.users = []
 const osmCache = new Map()
 const osmInflight = new Map()
 const areaBounds = {
+  'Delhi NCR': { south: 28.20, west: 76.80, north: 28.90, east: 77.65 },
+  'Greater Noida': { south: 28.30, west: 77.35, north: 28.65, east: 77.70 },
+  Noida: { south: 28.48, west: 77.30, north: 28.67, east: 77.45 },
+  Ghaziabad: { south: 28.60, west: 77.30, north: 28.85, east: 77.60 },
+  Delhi: { south: 28.45, west: 76.84, north: 28.88, east: 77.35 },
+  Gurugram: { south: 28.30, west: 76.85, north: 28.55, east: 77.20 },
+  Faridabad: { south: 28.30, west: 77.20, north: 28.55, east: 77.45 },
+  Bengaluru: { south: 12.84, west: 77.50, north: 13.15, east: 77.82 },
   Indiranagar: { south: 12.955, west: 77.625, north: 13.01, east: 77.67 },
   Koramangala: { south: 12.91, west: 77.60, north: 12.96, east: 77.65 },
   Whitefield: { south: 12.94, west: 77.72, north: 13.04, east: 77.80 },
-  'Any area': { south: 12.84, west: 77.50, north: 13.15, east: 77.82 },
+  'Any area': { south: 28.20, west: 76.80, north: 28.90, east: 77.65 },
 }
 let nominatimQueue = Promise.resolve()
 let nominatimLastRequest = 0
@@ -158,16 +166,27 @@ function osmService(tags) {
   return 'Clinic'
 }
 
-async function findOsmClinics(area, service) {
-  // Send only generic provider/category and area terms upstream, never the user's free-text concern.
+async function findOsmClinics(area, service, search) {
+  // Send only a clinic name/category and broad area upstream, never a health concern.
   const terms = { Dentistry: 'dentist', ENT: 'ENT doctor', Dermatology: 'dermatologist', 'General medicine': 'doctor' }
-  const prompt = [service === 'All services' || !service ? 'clinic' : (terms[service] || service), area === 'Any area' ? 'Bengaluru' : area, 'Bengaluru'].join(' ').trim().replace(/\s+/g, ' ')
-  const key = prompt.toLowerCase()
+  const areaName = area.trim() || 'Delhi NCR'
+  const bengaluruArea = /bengaluru|bangalore|indiranagar|koramangala|whitefield/i.test(areaName)
+  const region = bengaluruArea ? 'Bengaluru' : 'Delhi NCR'
+  const matchedArea = Object.keys(areaBounds).find((name) => name.toLowerCase() === areaName.toLowerCase())
+  const bounds = areaBounds[matchedArea] || areaBounds[region]
+  const categoryTerm = service === 'All services' || !service ? 'clinic' : (terms[service] || service)
+  const clinicName = search.trim().slice(0, 100)
+  const placeTerm = clinicName ? `${clinicName} ${categoryTerm}` : categoryTerm
+  const normalizedArea = areaName.toLowerCase()
+  const areaTerm = ['any area', 'delhi ncr'].includes(normalizedArea) ? (bengaluruArea ? 'Bengaluru' : 'Delhi') : areaName
+  const bengaluruNeighborhood = ['Indiranagar', 'Koramangala', 'Whitefield'].includes(matchedArea)
+  const regionTerm = bengaluruNeighborhood ? 'Bengaluru' : (matchedArea || ['any area', 'delhi ncr'].includes(normalizedArea)) ? '' : (bengaluruArea ? 'Bengaluru' : 'Delhi')
+  const prompt = [placeTerm, areaTerm, regionTerm, 'India'].filter(Boolean).join(' ').trim().replace(/\s+/g, ' ')
+  const key = `${service.toLowerCase()}|${prompt.toLowerCase()}`
   const cached = osmCache.get(key)
   if (cached && cached.expiresAt > Date.now()) return cached.clinics
   if (osmInflight.has(key)) return osmInflight.get(key)
-  const bounds = areaBounds[area] || areaBounds['Any area']
-  const params = new URLSearchParams({ q: prompt, format: 'jsonv2', addressdetails: '1', limit: '30', viewbox: `${bounds.west},${bounds.north},${bounds.east},${bounds.south}`, bounded: '1' })
+  const params = new URLSearchParams({ q: prompt, format: 'jsonv2', addressdetails: '1', extratags: '1', limit: '30', viewbox: `${bounds.west},${bounds.north},${bounds.east},${bounds.south}`, bounded: '1' })
   const performLookup = async () => {
     const wait = Math.max(0, 1100 - (Date.now() - nominatimLastRequest))
     if (wait) await new Promise((resolve) => setTimeout(resolve, wait))
@@ -184,13 +203,13 @@ async function findOsmClinics(area, service) {
   const result = pending.then((payload) => {
     const clinics = payload.map((place) => {
     const kind = `${place.category}/${place.type}`.toLowerCase()
-    if (!['amenity/clinic', 'amenity/doctors', 'amenity/dentist', 'amenity/hospital', 'healthcare/clinic', 'healthcare/doctor', 'healthcare/dentist'].includes(kind) || !place.name) return null
+    if (!['amenity/clinic', 'amenity/doctors', 'amenity/dentist', 'amenity/hospital', 'healthcare/clinic', 'healthcare/doctor', 'healthcare/dentist', 'healthcare/hospital'].includes(kind) || !place.name) return null
     const placeName = place.name.toLowerCase()
     const matchesService = service === 'All services'
       || (service === 'Dentistry' && (place.type === 'dentist' || /dent|orthodont/.test(placeName)))
       || (service === 'ENT' && /(^|[^a-z])(ear|nose|throat|ent)([^a-z]|$)|otolaryng/.test(placeName))
       || (service === 'Dermatology' && /dermat|skin/.test(placeName))
-      || (service === 'General medicine' && ['doctor', 'doctors'].includes(place.type))
+      || (service === 'General medicine' && ['doctor', 'doctors', 'clinic', 'hospital'].includes(place.type))
       || (service === 'Clinic' && ['clinic', 'hospital'].includes(place.type))
     if (!matchesService) return null
     const address = place.address || {}
@@ -209,7 +228,8 @@ async function findOsmClinics(area, service) {
       accent: 'teal', artLabel: category.toUpperCase(), slots: [], source: 'OpenStreetMap',
       osmUrl: `https://www.openstreetmap.org/${place.osm_type}/${place.osm_id}`,
       mapsUrl: `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=18/${lat}/${lon}`,
-      website: null, phone: null,
+      website: place.extratags?.website || place.extratags?.['contact:website'] || null,
+      phone: place.extratags?.phone || place.extratags?.['contact:phone'] || null,
     }
     }).filter(Boolean)
     osmCache.set(key, { clinics, expiresAt: Date.now() + 60 * 60 * 1000 })
@@ -362,7 +382,7 @@ app.get('/api/clinics', async (request, response, next) => {
   try {
     const { search = '', area = '', service = '', source = 'demo', date = new Date().toISOString().slice(0, 10) } = request.query
     if (source === 'osm') {
-      const clinics = await findOsmClinics(String(area || 'Any area'), String(service || 'All services'))
+      const clinics = await findOsmClinics(String(area || 'Delhi NCR'), String(service || 'All services'), String(search || ''))
       return response.json({ clinics, source: 'OpenStreetMap', fetchedAt: new Date().toISOString(), attribution: '© OpenStreetMap contributors' })
     }
     let clinics = await getClinics()
