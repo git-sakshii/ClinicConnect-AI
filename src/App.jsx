@@ -249,6 +249,7 @@ function App() {
     { id: 'appointments', label: 'My appointments', icon: CalendarDays },
     { id: 'clinic', label: 'Clinic portal', icon: Stethoscope },
   ]
+  const viewLabels = { ...Object.fromEntries(navigation.map(({ id, label }) => [id, label])), account: 'Account & profile' }
 
   return (
     <div className="app-shell">
@@ -280,11 +281,11 @@ function App() {
 
       <main className="main-area" id="top">
         <header className="topbar">
-          <div className="breadcrumb">Patient workspace <span>/</span> <strong>{navigation.find((item) => item.id === activeView)?.label}</strong></div>
+          <div className="breadcrumb">Patient workspace <span>/</span> <strong>{viewLabels[activeView]}</strong></div>
           <div className="top-actions">
             <span className={`demo-pill ${directorySource !== 'demo' ? 'live-pill' : ''}`}><span /> {directorySource === 'osm' ? 'OPENSTREETMAP' : directorySource === 'partners' ? 'PARTNER CLINICS' : 'SAMPLE DATA'}</span>
             <button className="language-button" onClick={() => setLanguage((current) => current === 'en' ? 'hi' : current === 'hi' ? 'kn' : 'en')} aria-label="Switch assistant language"><Languages size={16} /> {language === 'en' ? 'English' : language === 'hi' ? 'हिन्दी' : 'ಕನ್ನಡ'} <ChevronDown size={14} /></button>
-            <button className="top-avatar" aria-label="Open account and clinic portal" title={account?.email || 'Sign in'} onClick={() => setActiveView('clinic')}>{account?.email?.slice(0, 2).toUpperCase() || 'SS'}</button>
+            <button className="top-avatar" aria-label="Open account profile" title={account?.email || 'Account & profile'} onClick={() => setActiveView('account')}>{account?.email?.slice(0, 2).toUpperCase() || 'SS'}</button>
           </div>
         </header>
 
@@ -350,10 +351,47 @@ function App() {
 
         {activeView === 'appointments' && <AppointmentsPage appointments={appointments} account={account} onUpdate={updateAppointment} onBrowse={() => setActiveView('discover')} />}
         {activeView === 'clinic' && <ClinicPage appointments={appointments} onUpdate={updateAppointment} account={account} setAccount={setAccount} />}
+        {activeView === 'account' && <AccountPage account={account} setAccount={setAccount} onBrowse={() => setActiveView('discover')} onAppointments={() => setActiveView('appointments')} onClinicPortal={() => setActiveView('clinic')} />}
       </main>
 
       {bookingClinic && <BookingModal clinic={bookingClinic} slot={bookingSlot} day={selectedDay} service={bookingService} setService={setBookingService} name={patientName} phone={patientPhone} setName={setPatientName} setPhone={setPatientPhone} state={bookingState} error={bookingError} account={account} setAccount={setAccount} onPatientName={setPatientName} onSubmit={submitBooking} onClose={() => { setBookingClinic(null); setBookingState('idle'); setBookingError('') }} onRetry={() => { setBookingState('idle'); setBookingError('') }} />}
       {toast && <div className="toast" role="status"><Check size={16} />{toast}<button onClick={() => setToast('')} aria-label="Dismiss notification"><X size={15} /></button></div>}
+    </div>
+  )
+}
+
+function AccountPage({ account, setAccount, onBrowse, onAppointments, onClinicPortal }) {
+  async function signOut() {
+    await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {})
+    setAccount(null)
+  }
+
+  const roleLabel = account?.role === 'admin' ? 'Platform administrator' : account?.role === 'clinic' ? 'Clinic account' : 'Patient account'
+
+  return (
+    <div className="page-content secondary-page">
+      <div className="eyebrow"><span className="eyebrow-line" /> ACCOUNT</div>
+      <h1>Account &amp; profile</h1>
+      {account ? <>
+        <p className="welcome-sub">Your account details and shortcuts.</p>
+        <div className="secondary-panel">
+          <div className="panel-heading"><div><h2>{account.name || roleLabel}</h2><p>{account.email}</p></div><UserRound size={21} /></div>
+          <div className="clinic-request-row"><div className="request-main"><strong>{roleLabel}</strong><span>{account.role === 'patient' ? 'Your appointment requests are linked to this account.' : 'Manage your workspace and account from the relevant portal.'}</span></div></div>
+          <div className="account-actions">
+            {account.role === 'patient' ? <button className="primary-button" onClick={onAppointments}>My appointments <ArrowRight size={15} /></button> : <button className="primary-button" onClick={onClinicPortal}>{account.role === 'admin' ? 'Platform dashboard' : 'Clinic dashboard'} <ArrowRight size={15} /></button>}
+            <button className="text-button" onClick={signOut}>Sign out</button>
+          </div>
+        </div>
+      </> : <>
+        <p className="welcome-sub">You’re browsing as a guest. Sign in or create a patient account when you request an appointment.</p>
+        <div className="secondary-panel account-guest-panel">
+          <div className="panel-heading"><div><h2>Welcome to ClinicConnect</h2><p>Choose where you’d like to continue.</p></div><UserRound size={21} /></div>
+          <div className="account-actions">
+            <button className="primary-button" onClick={onBrowse}>Find a clinic <ArrowRight size={15} /></button>
+            <button className="text-button" onClick={onClinicPortal}>Clinic or administrator portal</button>
+          </div>
+        </div>
+      </>}
     </div>
   )
 }

@@ -172,6 +172,8 @@ h1,h2,h3 { font-family: 'Segoe UI Variable', 'Segoe UI', sans-serif; }
 .secondary-page { max-width: 1050px; padding-top: 46px; }
 .secondary-page h1 { margin: 13px 0 6px; font-size: 30px; }
 .secondary-panel { margin-top: 26px; overflow: hidden; border: 1px solid #e3ebf0; border-radius: 13px; background: #fff; }
+.account-actions { display: flex; align-items: center; gap: 14px; padding: 16px 22px; }
+.account-actions .text-button { display: inline-flex; margin: 0; }
 .panel-heading { display: flex; align-items: center; justify-content: space-between; padding: 19px 22px; border-bottom: 1px solid #edf1f4; }
 .panel-heading>svg { color: #6eab9f; }
 .appointment-row,.clinic-request-row { display: flex; align-items: center; gap: 15px; min-height: 77px; padding: 12px 22px; border-bottom: 1px solid #eff3f5; }
