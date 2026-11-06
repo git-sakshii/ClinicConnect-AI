@@ -14,11 +14,18 @@ function dayLabel(date) {
   return new Intl.DateTimeFormat('en-IN', { weekday: 'short', day: 'numeric' }).format(date)
 }
 
+function localDateKey(date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 function nextDays() {
   return Array.from({ length: 7 }, (_, index) => {
     const date = new Date()
     date.setDate(date.getDate() + index)
-    return { key: date.toISOString().slice(0, 10), label: index === 0 ? 'Today' : dayLabel(date), sub: index === 0 ? dayLabel(date) : '' }
+    return { key: localDateKey(date), label: index === 0 ? 'Today' : dayLabel(date), sub: index === 0 ? dayLabel(date) : '' }
   })
 }
 
@@ -49,6 +56,7 @@ function App() {
   const [patientName, setPatientName] = useState('')
   const [patientPhone, setPatientPhone] = useState('')
   const [bookingState, setBookingState] = useState('idle')
+  const [bookingError, setBookingError] = useState('')
   const [toast, setToast] = useState('')
   const days = useMemo(() => nextDays(), [])
   const displayedClinics = useMemo(() => {
@@ -190,12 +198,14 @@ function App() {
     setBookingSlot(slot)
     setBookingService(clinic.services.includes(service) ? service : clinic.services[0])
     setBookingState('idle')
+    setBookingError('')
   }
 
   async function submitBooking(event) {
     event.preventDefault()
     if (!bookingClinic || !bookingSlot) return
     setBookingState('saving')
+    setBookingError('')
     try {
       const response = await fetch('/api/appointments', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -213,7 +223,10 @@ function App() {
       if (!response.ok) throw new Error(result.error || 'Could not submit booking')
       setBookingState('done')
       setRefreshKey((value) => value + 1)
-    } catch {
+    } catch (error) {
+      setBookingError(error instanceof TypeError
+        ? 'The booking service could not be reached. Check that the API server is running, then retry.'
+        : error.message || 'Could not submit the request. Please retry.')
       setBookingState('error')
     }
   }
@@ -339,7 +352,7 @@ function App() {
         {activeView === 'clinic' && <ClinicPage appointments={appointments} onUpdate={updateAppointment} account={account} setAccount={setAccount} />}
       </main>
 
-      {bookingClinic && <BookingModal clinic={bookingClinic} slot={bookingSlot} day={selectedDay} service={bookingService} setService={setBookingService} name={patientName} phone={patientPhone} setName={setPatientName} setPhone={setPatientPhone} state={bookingState} account={account} setAccount={setAccount} onPatientName={setPatientName} onSubmit={submitBooking} onClose={() => { setBookingClinic(null); setBookingState('idle') }} onRetry={() => setBookingState('idle')} />}
+      {bookingClinic && <BookingModal clinic={bookingClinic} slot={bookingSlot} day={selectedDay} service={bookingService} setService={setBookingService} name={patientName} phone={patientPhone} setName={setPatientName} setPhone={setPatientPhone} state={bookingState} error={bookingError} account={account} setAccount={setAccount} onPatientName={setPatientName} onSubmit={submitBooking} onClose={() => { setBookingClinic(null); setBookingState('idle'); setBookingError('') }} onRetry={() => { setBookingState('idle'); setBookingError('') }} />}
       {toast && <div className="toast" role="status"><Check size={16} />{toast}<button onClick={() => setToast('')} aria-label="Dismiss notification"><X size={15} /></button></div>}
     </div>
   )
@@ -360,7 +373,7 @@ function ClinicCard({ clinic, onBook, saved, onSave }) {
   )
 }
 
-function BookingModal({ clinic, slot, day, service, setService, name, phone, setName, setPhone, state, account, setAccount, onPatientName, onSubmit, onClose, onRetry }) {
+function BookingModal({ clinic, slot, day, service, setService, name, phone, setName, setPhone, state, error, account, setAccount, onPatientName, onSubmit, onClose, onRetry }) {
   const [accessMode, setAccessMode] = useState('register')
   const [accessName, setAccessName] = useState('')
   const [accessEmail, setAccessEmail] = useState('')
@@ -393,7 +406,7 @@ function BookingModal({ clinic, slot, day, service, setService, name, phone, set
           <h2 id="booking-title">Request this appointment</h2><p className="modal-intro">{partnerBooking ? account && account.role !== 'patient' ? `You’re signed in as ${account.role}. Use a separate patient account to request an appointment.` : 'Sign in with a patient account to send a request to this clinic.' : 'We’ll share only the details needed for this sample booking.'}</p>
           <div className="selected-clinic"><div className={`small-clinic-icon art-${clinic.accent}`}><Stethoscope size={18} /></div><div><strong>{clinic.name}</strong><span>{date} · {slot}</span></div></div>
           {state === 'conflict' && <div className="form-alert">That sample slot was just taken. Choose another available time.</div>}
-          {state === 'error' && <div className="form-alert">We couldn’t submit the request. Please retry.</div>}
+          {state === 'error' && <div className="form-alert">{error || 'Could not submit the request. Please retry.'}</div>}
           {clinic.services.length > 1 && <label className="booking-service">Service for this visit<select value={service} onChange={(event) => setService(event.target.value)}>{clinic.services.map((item) => <option key={item}>{item}</option>)}</select></label>}
           {partnerBooking && account?.role !== 'patient' ? <>
             <div className="auth-tabs"><button className={accessMode === 'register' ? 'selected' : ''} onClick={() => setAccessMode('register')}>Create account</button><button className={accessMode === 'login' ? 'selected' : ''} onClick={() => setAccessMode('login')}>Sign in</button></div>
