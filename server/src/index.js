@@ -402,26 +402,29 @@ app.get('/api/clinics', async (request, response, next) => {
 
 app.get('/api/assistant/status', (_request, response) => response.json({ aiEnabled: Boolean(process.env.OPENAI_API_KEY) }))
 
-async function interpretWithOpenAI(message, language) {
+async function interpretWithOpenAI(message, language, currentArea) {
   const model = process.env.OPENAI_MODEL || 'gpt-4o-mini'
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
   const upstream = await fetch('https://api.openai.com/v1/responses', {
     method: 'POST',
     headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model,
       store: false,
-      instructions: `You help route appointment requests to clinic services. This is not medical advice. Never diagnose, recommend treatment, or infer a condition. Use only these service labels: ENT, Dentistry, Dermatology, General medicine. Suggest a service only when the user's own words clearly identify a relevant body area or explicitly name the service; for example acne or pimples can map to Dermatology. Otherwise use null. Extract an area only when explicitly named by the user; never guess a location from "near me". Detect if date and time preference are present. Reply in ${language === 'kn' ? 'Kannada' : language === 'hi' ? 'Hindi' : 'English'}, briefly and neutrally. Ask the user to confirm any suggested service. Do not claim a booking is made or that slots are available.`,
+      instructions: `You help route appointment requests to clinic services. This is not medical advice. Never diagnose, recommend treatment, or infer a condition. Use only these service labels: ENT, Dentistry, Dermatology, General medicine. Suggest a service only when the user's own words clearly identify a relevant body area or explicitly name the service; for example acne or pimples can map to Dermatology. Otherwise use null. Extract an area only when explicitly named by the user; never guess a location from "near me". Today's date in Asia/Kolkata is ${today}. Resolve today, tomorrow, and weekday requests to an ISO YYYY-MM-DD date; otherwise use null. Extract an exact requested time such as 5:30 pm when given, otherwise use morning, afternoon, evening, or null. Reply in ${language === 'kn' ? 'Kannada' : language === 'hi' ? 'Hindi' : 'English'}, briefly and neutrally. Do not claim a booking is made or that slots are available.`,
       input: [{ role: 'user', content: message }],
       text: { format: { type: 'json_schema', name: 'booking_intent', strict: true, schema: {
         type: 'object', additionalProperties: false,
         properties: {
           suggestedService: { type: ['string', 'null'], enum: ['ENT', 'Dentistry', 'Dermatology', 'General medicine', null] },
           area: { type: ['string', 'null'], maxLength: 80 },
+          preferredDate: { type: ['string', 'null'], pattern: '^([0-9]{4}-[0-9]{2}-[0-9]{2})?$' },
+          preferredTime: { type: ['string', 'null'], maxLength: 20 },
           dateMentioned: { type: 'boolean' },
           timeMentioned: { type: 'boolean' },
           message: { type: 'string' },
         },
-        required: ['suggestedService', 'area', 'dateMentioned', 'timeMentioned', 'message'],
+        required: ['suggestedService', 'area', 'preferredDate', 'preferredTime', 'dateMentioned', 'timeMentioned', 'message'],
       } } },
     }),
     signal: AbortSignal.timeout(20_000),
@@ -432,12 +435,22 @@ async function interpretWithOpenAI(message, language) {
   if (!output) throw new Error('AI provider returned no structured result')
   const parsed = JSON.parse(output)
   const services = ['ENT', 'Dentistry', 'Dermatology', 'General medicine']
-  const mentionedArea = typeof parsed.area === 'string' && message.toLocaleLowerCase().includes(parsed.area.toLocaleLowerCase()) ? parsed.area.trim().slice(0, 80) : null
+  const areaAliases = [
+    { name: 'Greater Noida', keys: ['greater noida', 'ग्रेटर नोएडा'] }, { name: 'Noida', keys: ['noida', 'नोएडा'] },
+    { name: 'Ghaziabad', keys: ['ghaziabad', 'गाजियाबाद', 'ग़ाज़ियाबाद'] }, { name: 'Delhi', keys: ['delhi', 'दिल्ली'] },
+    { name: 'Gurugram', keys: ['gurugram', 'gurgaon', 'गुरुग्राम', 'गुड़गांव'] }, { name: 'Faridabad', keys: ['faridabad', 'फरीदाबाद'] },
+    { name: 'Indiranagar', keys: ['indiranagar'] }, { name: 'Koramangala', keys: ['koramangala'] }, { name: 'Whitefield', keys: ['whitefield'] },
+  ]
+  const matchedArea = areaAliases.find((item) => item.keys.some((key) => message.toLocaleLowerCase().includes(key)))?.name
+  const mentionedArea = matchedArea || (typeof parsed.area === 'string' && message.toLocaleLowerCase().includes(parsed.area.toLocaleLowerCase()) ? parsed.area.trim().slice(0, 80) : null)
   return {
     source: 'openai',
     suggestedService: services.includes(parsed.suggestedService) ? parsed.suggestedService : null,
-    area: mentionedArea,
-    missing: [!parsed.dateMentioned && 'date', !parsed.timeMentioned && 'time'].filter(Boolean),
+    language,
+    area: mentionedArea || (typeof currentArea === 'string' && currentArea !== 'Any area' ? currentArea : null),
+    preferredDate: /^\d{4}-\d{2}-\d{2}$/.test(parsed.preferredDate || '') && message.match(/today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\bkal\b|\baaj\b|आज|कल|सोमवार|मंगलवार|बुधवार|गुरुवार|शुक्रवार|शनिवार|रविवार|ಇಂದು|ನಾಳೆ|ಸೋಮವಾರ|ಮಂಗಳವಾರ|ಬುಧವಾರ|ಗುರುವಾರ|ಶುಕ್ರವಾರ|ಶನಿವಾರ|ಭಾನುವಾರ/i) ? parsed.preferredDate : null,
+    preferredTime: /^(morning|afternoon|evening)$/i.test(parsed.preferredTime || '') || /^(\d{1,2})(:\d{2})?\s*(am|pm)$/i.test(parsed.preferredTime || '') ? parsed.preferredTime.toLowerCase().replace(/^(\d{1,2})(?!:)/, '$1:00').replace(/\s+/g, ' ') : null,
+    missing: [!parsed.dateMentioned && 'date', !parsed.timeMentioned && 'time', /near me|nearby|मेरे पास|आसपास/i.test(message) && !mentionedArea && (!currentArea || currentArea === 'Any area') ? 'area' : null].filter(Boolean),
     message: typeof parsed.message === 'string' ? parsed.message.slice(0, 500) : 'Please confirm the service and preferred appointment details.',
   }
 }
@@ -445,39 +458,74 @@ async function interpretWithOpenAI(message, language) {
 app.post('/api/assistant/interpret', async (request, response) => {
   const message = typeof request.body?.message === 'string' ? request.body.message.trim().slice(0, 500) : ''
   if (!message) return response.status(400).json({ error: 'Add a short description of what you are looking for.' })
-  const language = /[\u0900-\u097F]/.test(message) ? 'hi' : /[\u0C80-\u0CFF]/.test(message) ? 'kn' : request.body?.language
+  const text = message.toLocaleLowerCase('en-IN')
+  const devanagari = /[\u0900-\u097F]/.test(message)
+  const hasKannadaScript = /[\u0C80-\u0CFF]/.test(message)
+  const romanHindi = /\b(mujhe|mere|meri|mera|chehre|chehra|kaan|kan|aankh|gale|dard|dane|daane|khujli|kal|aaj|subah|shaam|sham|ke paas|ke pass|chahiye|dikhaiye|dikhao)\b/i.test(text)
+  const language = devanagari ? 'hi' : hasKannadaScript ? 'kn' : romanHindi ? 'hi' : request.body?.language
   if (request.body?.allowAi === true && process.env.OPENAI_API_KEY) {
-    try { return response.json(await interpretWithOpenAI(message, language)) }
+    try { return response.json(await interpretWithOpenAI(message, language, request.body?.currentArea)) }
     catch (error) {
       console.error('AI intent request failed:', error.message)
       return response.status(502).json({ error: 'AI matching is temporarily unavailable. Turn off AI matching or try again later.' })
     }
   }
 
-  const text = message.toLowerCase()
   const mappings = [
-    { keys: ['ear', 'nose', 'throat', 'hearing', 'ಕಿವಿ', 'ಮೂಗು', 'ಗಂಟಲು', 'ಕಿವಿನೋವು'], service: 'ENT', label: 'ear, nose or throat concern' },
-    { keys: ['tooth', 'teeth', 'dent', 'gum', 'ಹಲ್ಲು', 'ದಂತ', 'ಹಲ್ಲುನೋವು'], service: 'Dentistry', label: 'dental appointment' },
-    { keys: ['skin', 'rash', 'acne', 'pimple', 'pimples', 'face acne', 'facial acne', 'hair', 'मुंहासे', 'मुहांसे', 'मुंहासा', 'दाने', 'दाना', 'त्वचा', 'चेहरे पर दाने', 'चेहरे पर मुंहासे', 'muhase', 'muhase', 'daane', 'daana', 'chehre par dane', 'chehre par muhase', 'ಚರ್ಮ', 'ದದ್ದು', 'ಮೊಡವೆ'], service: 'Dermatology', label: 'skin or hair appointment' },
-    { keys: ['general doctor', 'general medicine', 'check-up', 'checkup', 'ಸಾಮಾನ್ಯ ವೈದ್ಯ'], service: 'General medicine', label: 'general consultation' },
+    { pattern: /\b(ear|ears|nose|throat|hearing|tonsil|sinus|kaan|kan|naak|gala|gale|sunai)\b|कान|नाक|गला|गले|सुनाई|ಕಿವಿ|ಮೂಗು|ಗಂಟಲು|ಕಿವಿನೋವು/, service: 'ENT', label: 'ear, nose or throat concern' },
+    { pattern: /\b(tooth|teeth|dentist|dental|gum|gums|daant|dant|masooda|masude)\b|दांत|दाँत|मसूड़ा|मसूड़े|ಹಲ್ಲು|ದಂತ|ಹಲ್ಲುನೋವು/, service: 'Dentistry', label: 'dental appointment' },
+    { pattern: /\b(skin|rash|acne|pimple|pimples|dermatologist|hair|itching|itchy|daane|dane|muhase|muhase|khujli|chehre? pe dane|face pe dane)\b|मुंहासे|मुहांसे|मुंहासा|दाने|दाना|त्वचा|चेहरे पर दाने|चेहरे पर मुंहासे|खुजली|ચર્મ|ದದ್ದು|ಮೊಡವೆ/, service: 'Dermatology', label: 'skin or hair appointment' },
+    { pattern: /\b(general doctor|general medicine|family doctor|physician|fever|cold|cough|check[- ]?up|bukhar|sardi|khansi)\b|बुखार|जुकाम|खांसी|खाँसी|सामान्य चिकित्सक|ಸಾಮಾನ್ಯ ವೈದ್ಯ/, service: 'General medicine', label: 'general consultation' },
   ]
-  const match = mappings.find((item) => item.keys.some((key) => text.includes(key)))
-  const dateMentioned = /\b(today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i.test(text) || /आज|कल|सोमवार|मंगलवार|बुधवार|गुरुवार|शुक्रवार|शनिवार|रविवार|ಇಂದು|ನಾಳೆ|ಸೋಮವಾರ|ಮಂಗಳವಾರ|ಬುಧವಾರ|ಗುರುವಾರ|ಶುಕ್ರವಾರ|ಶನಿವಾರ|ಭಾನುವಾರ/.test(text)
-  const timeMentioned = /\b(morning|afternoon|evening|\d{1,2}(:\d{2})?\s?(am|pm))\b/i.test(text) || /सुबह|दोपहर|शाम|ಬೆಳಗ್ಗೆ|ಮಧ್ಯಾಹ್ನ|ಸಂಜೆ/.test(text)
+  const match = mappings.find((item) => item.pattern.test(text))
+  const dateExpression = /\b(today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|aaj|kal|somvaar|somvar|mangalvaar|mangalvar|budhvaar|budhvar|guruvaar|guruvar|shukravaar|shukravar|shanivaar|shanivar|ravivaar|ravivar)\b|आज|कल|सोमवार|मंगलवार|बुधवार|गुरुवार|शुक्रवार|शनिवार|रविवार|ಇಂದು|ನಾಳೆ|ಸೋಮವಾರ|ಮಂಗಳವಾರ|ಬುಧವಾರ|ಗುರುವಾರ|ಶುಕ್ರವಾರ|ಶನಿವಾರ|ಭಾನುವಾರ/i
+  const dateMatch = text.match(dateExpression)
+  const dateToken = dateMatch?.[0] || ''
+  let preferredDate = null
+  if (dateToken) {
+    const today = new Date(new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()))
+    let offset = /tomorrow|\bkal\b|कल|ನಾಳೆ/i.test(dateToken) ? 1 : 0
+    const weekdays = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
+    const weekdayIndex = weekdays.findIndex((day) => day === dateToken.toLowerCase())
+    const localizedWeekdays = { 'सोमवार': 1, 'somvaar': 1, 'somvar': 1, 'ಮಂಗಳವಾರ': 2, 'मंगलवार': 2, 'mangalvaar': 2, 'mangalvar': 2, 'बुधवार': 3, 'budhvaar': 3, 'budhvar': 3, 'ಗುರುವಾರ': 4, 'गुरुवार': 4, 'guruvaar': 4, 'guruvar': 4, 'शुक्रवार': 5, 'shukravaar': 5, 'shukravar': 5, 'शनिवार': 6, 'shanivaar': 6, 'shanivar': 6, 'रविवार': 0, 'ravivaar': 0, 'ravivar': 0, 'ಸೋಮವಾರ': 1, 'ಮಂಗಳವಾರ': 2, 'ಬುಧವಾರ': 3, 'ಶುಕ್ರವಾರ': 5, 'ಶನಿವಾರ': 6, 'ಭಾನುವಾರ': 0 }
+    const targetWeekday = weekdayIndex >= 0 ? weekdayIndex : localizedWeekdays[dateToken]
+    if (targetWeekday !== undefined && targetWeekday !== -1) {
+      offset = (targetWeekday - today.getDay() + 7) % 7
+      if (!offset) offset = 7
+    }
+    today.setDate(today.getDate() + offset)
+    preferredDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+  }
+  const timeMentioned = /\b(morning|afternoon|evening|tonight|\d{1,2}(:\d{2})?\s?(am|pm)|subah|dopahar|shaam|sham)\b|सुबह|दोपहर|शाम|ಬೆಳಗ್ಗೆ|ಮಧ್ಯಾಹ್ನ|ಸಂಜೆ/i.test(text)
+  const exactTime = text.match(/\b(\d{1,2})(?::([0-5]\d))?\s*(am|pm)\b/i)
+  const preferredTime = exactTime ? `${Number(exactTime[1])}:${exactTime[2] || '00'} ${exactTime[3].toLowerCase()}` : /morning|subah|सुबह|ಬೆಳಗ್ಗೆ/i.test(text) ? 'morning' : /afternoon|दोपहर|ಮಧ್ಯಾಹ್ನ/i.test(text) ? 'afternoon' : /evening|tonight|shaam|sham|शाम|ಸಂಜೆ/i.test(text) ? 'evening' : null
   const kannada = language === 'kn'
   const hindi = language === 'hi'
-  const mentionedArea = ['Koramangala', 'Indiranagar', 'Whitefield', 'Greater Noida'].find((item) => text.includes(item.toLowerCase())) || null
+  const areaAliases = [
+    { name: 'Greater Noida', keys: ['greater noida', 'ग्रेटर नोएडा'] }, { name: 'Noida', keys: ['noida', 'नोएडा'] },
+    { name: 'Ghaziabad', keys: ['ghaziabad', 'गाजियाबाद', 'ग़ाज़ियाबाद'] }, { name: 'Delhi', keys: ['delhi', 'दिल्ली'] },
+    { name: 'Gurugram', keys: ['gurugram', 'gurgaon', 'गुरुग्राम', 'गुड़गांव'] }, { name: 'Faridabad', keys: ['faridabad', 'फरीदाबाद'] },
+    { name: 'Indiranagar', keys: ['indiranagar'] }, { name: 'Koramangala', keys: ['koramangala'] }, { name: 'Whitefield', keys: ['whitefield'] },
+  ]
+  const mentionedArea = areaAliases.find((item) => item.keys.some((key) => text.includes(key)))?.name || null
+  const requestedNearby = /\b(near me|nearby|close to me|ke paas|ke pass|mere paas|aas paas|around me)\b|मेरे पास|आसपास|नज़दीक|नजदीक/i.test(text)
+  const providedArea = typeof request.body?.currentArea === 'string' && request.body.currentArea.trim() !== 'Any area' ? request.body.currentArea.trim().slice(0, 80) : null
+  const area = mentionedArea || providedArea
+  const missing = [!preferredDate && 'date', !timeMentioned && 'time', requestedNearby && !area && 'area'].filter(Boolean)
   response.json({
     source: 'demo-rules',
+    language: hindi ? 'hi' : kannada ? 'kn' : 'en',
     suggestedService: match?.service || null,
-    area: mentionedArea,
-    missing: [!dateMentioned && 'date', !timeMentioned && 'time'].filter(Boolean),
+    area,
+    preferredDate,
+    preferredTime,
+    missing,
     message: hindi
       ? (match ? `आपके अनुरोध से ${match.service} सेवा मेल खा सकती है। यह निदान नहीं है। क्लिनिक खोजने से पहले कृपया इस सेवा की पुष्टि करें।` : 'मैं इस विवरण से कोई क्लिनिक सेवा सुरक्षित रूप से नहीं चुन सका। सेवा चुनें या खोज फ़िल्टर का उपयोग करें।')
       : kannada
       ? (match ? `ನಿಮ್ಮ ವಿವರಣೆಗೆ ${match.service} ಸೇವೆ ಹೊಂದಿರಬಹುದು. ಮುಂದುವರಿಯುವ ಮೊದಲು ಈ ಸೇವೆಯನ್ನು ದೃಢೀಕರಿಸಿ.` : 'ಈ ವಿವರಣೆಗೆ ಸರಿಯಾದ ಸೇವೆಯನ್ನು ಖಚಿತಪಡಿಸಲು ಸಾಧ್ಯವಾಗಲಿಲ್ಲ. ಸೇವೆಯ ಹೆಸರನ್ನು ಪ್ರಯತ್ನಿಸಿ ಅಥವಾ ಕ್ಲಿನಿಕ್ ಹುಡುಕಾಟ ಬಳಸಿ.')
       : match
-        ? `I found wording that may match ${match.label === 'ear, nose or throat concern' ? 'an' : 'a'} ${match.label}. I can show clinics that list ${match.service}; please confirm that this is the service you want to book.`
+        ? hindi ? `आपकी बात से ${match.service} अपॉइंटमेंट सही विकल्प हो सकता है। यह निदान नहीं है।` : `Your description may fit ${match.label}. This is not a diagnosis. I can search clinics that offer ${match.service}.`
         : 'I could not safely match that wording to a sample service. Try a clinic-listed service or use the search filters.',
   })
 })

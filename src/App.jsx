@@ -10,7 +10,18 @@ import 'leaflet/dist/leaflet.css'
 import './App.css'
 
 const iconMap = { Dermatology: Activity, Dentistry: HeartPulse, ENT: Activity, 'General medicine': Stethoscope }
-const quickPrompts = ['I have acne on my face', 'मुझे चेहरे पर मुंहासे हैं', 'Find a dentist tomorrow']
+const quickPrompts = ['I have acne on my face', 'मुझे चेहरे पर मुंहासे हैं', 'मेरे कान में दर्द है', 'Find a dentist tomorrow']
+function assistantFollowUp(missing, language) {
+  if (language === 'hi') {
+    const labels = { date: 'तारीख', time: 'समय', area: 'क्षेत्र' }
+    return `खोज को सीमित करने के लिए ${missing.map((item) => labels[item] || item).join(', ')} बता सकते हैं। चाहें तो आगे बढ़कर उपलब्ध स्लॉट भी चुनें।`
+  }
+  if (language === 'kn') {
+    const labels = { date: 'ದಿನಾಂಕ', time: 'ಸಮಯ', area: 'ಪ್ರದೇಶ' }
+    return `ಹುಡುಕಾಟವನ್ನು ಸೀಮಿತಗೊಳಿಸಲು ${missing.map((item) => labels[item] || item).join(', ')} ತಿಳಿಸಿ. ಬೇಕಿದ್ದರೆ ಮುಂದುವರಿದು ಲಭ್ಯವಿರುವ ಸಮಯ ಆಯ್ಕೆಮಾಡಿ.`
+  }
+  return `Add ${missing.join(', ')} to narrow the search, or continue and choose from the available slots.`
+}
 const areaMapCenters = {
   'Any area': [28.6139, 77.209],
   'Delhi NCR': [28.55, 77.25],
@@ -57,6 +68,7 @@ function App() {
   const [savedClinics, setSavedClinics] = useState(() => new Set(JSON.parse(localStorage.getItem('clinicconnect:saved') || '[]')))
   const [directoryError, setDirectoryError] = useState('')
   const [service, setService] = useState('All services')
+  const [preferredTime, setPreferredTime] = useState(null)
   const [assistantText, setAssistantText] = useState('')
   const [language, setLanguage] = useState('en')
   const [isListening, setIsListening] = useState(false)
@@ -153,19 +165,22 @@ function App() {
   async function askAssistant(prompt = assistantText) {
     const clean = prompt.trim()
     if (!clean) return
-    if (/[\u0900-\u097F]/.test(clean)) setLanguage('hi')
-    else if (/[\u0C80-\u0CFF]/.test(clean)) setLanguage('kn')
+    const requestLanguage = /[\u0900-\u097F]/.test(clean) || /\b(mujhe|mere|meri|mera|chehre|chehra|kaan|kan|dard|dane|daane|khujli|kal|aaj|subah|shaam|sham|chahiye)\b/i.test(clean)
+      ? 'hi'
+      : /[\u0C80-\u0CFF]/.test(clean) ? 'kn' : /[a-z]/i.test(clean) ? 'en' : language
+    setLanguage(requestLanguage)
     setAssistantText(clean)
     setAssistantResult(null)
     setIsThinking(true)
     try {
       const response = await fetch('/api/assistant/interpret', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: clean, language, allowAi: aiEnabled && aiConsent }),
+        body: JSON.stringify({ message: clean, language: requestLanguage, currentArea: area, allowAi: aiEnabled && aiConsent }),
       })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || 'Assistant is unavailable')
       setAssistantResult(data)
+      if (data.language) setLanguage(data.language)
       if (data.area) setArea(data.area)
     } catch {
       setAssistantResult({ message: 'I could not understand that just now. Try a clinic service name, or use the search filters.', source: 'fallback' })
@@ -178,20 +193,19 @@ function App() {
     const suggested = assistantResult?.suggestedService
     if (!suggested) return
     setQuery('')
+    setLiveSearch(null)
     setService(suggested)
-    if (directorySource === 'osm') setLiveSearch({ query: '', area, service: suggested, requestedAt: Date.now() })
-    const selectedArea = area && area !== 'Any area'
-    const broadArea = language === 'hi'
-      ? directorySource === 'osm' ? 'दिल्ली NCR' : 'सभी स्वीकृत क्लिनिक क्षेत्रों'
-      : language === 'kn'
-        ? directorySource === 'osm' ? 'ದೆಹಲಿ NCR' : 'ಎಲ್ಲಾ ಅನುಮೋದಿತ ಕ್ಲಿನಿಕ್ ಪ್ರದೇಶಗಳು'
-        : directorySource === 'osm' ? 'Delhi NCR' : 'all approved partner areas'
+    setDirectorySource('partners')
+    setPreferredTime(assistantResult.preferredTime || null)
+    if (assistantResult.preferredDate && days.some((day) => day.key === assistantResult.preferredDate)) setSelectedDay(assistantResult.preferredDate)
+    const selectedArea = assistantResult.area || (area && area !== 'Any area' ? area : null)
+    const broadArea = language === 'hi' ? 'सभी स्वीकृत क्लिनिक क्षेत्रों' : language === 'kn' ? 'ಎಲ್ಲಾ ಅನುಮೋದಿತ ಕ್ಲಿನಿಕ್ ಪ್ರದೇಶಗಳು' : 'all approved partner areas'
     const nextMessage = language === 'hi'
-      ? `मैं ${selectedArea ? `${area} के पास` : broadArea} में ${suggested} सेवा वाले क्लिनिक खोज रहा हूँ। नज़दीकी परिणामों के लिए ऊपर के क्षेत्र फ़ील्ड में अपना क्षेत्र चुनें।`
+      ? `मैं ${selectedArea ? `${selectedArea} के पास` : broadArea} में ${suggested} सेवा देने वाले स्वीकृत क्लिनिक खोज रहा हूँ। यह निदान नहीं है। नज़दीकी परिणामों के लिए क्षेत्र चुनें; फिर क्लिनिक और उपलब्ध समय में से चुनें।`
       : language === 'kn'
-        ? `${selectedArea ? `${area} ಹತ್ತಿರ` : broadArea} ${suggested} ಸೇವೆಯ ಕ್ಲಿನಿಕ್‌ಗಳನ್ನು ಹುಡುಕುತ್ತಿದ್ದೇನೆ. ಹತ್ತಿರದ ಫಲಿತಾಂಶಗಳಿಗೆ ಮೇಲಿನ ಪ್ರದೇಶದ ಫೀಲ್ಡ್‌ನಲ್ಲಿ ನಿಮ್ಮ ಪ್ರದೇಶವನ್ನು ಆರಿಸಿ.`
-        : `Searching for clinics that list ${suggested} ${selectedArea ? `near ${area}` : `in ${broadArea}`}. For closer results, enter your area in the area field.`
-    setAssistantResult((current) => ({ ...current, message: nextMessage }))
+        ? `${selectedArea ? `${selectedArea} ಹತ್ತಿರ` : broadArea} ${suggested} ಸೇವೆಯ ಅನುಮೋದಿತ ಕ್ಲಿನಿಕ್‌ಗಳನ್ನು ಹುಡುಕುತ್ತಿದ್ದೇನೆ. ಇದು ರೋಗನಿರ್ಣಯವಲ್ಲ. ಹತ್ತಿರದ ಫಲಿತಾಂಶಗಳಿಗೆ ಪ್ರದೇಶವನ್ನು ಆರಿಸಿ; ನಂತರ ಕ್ಲಿನಿಕ್ ಮತ್ತು ಸಮಯವನ್ನು ಆಯ್ಕೆಮಾಡಿ.`
+        : `Searching approved, bookable clinics that list ${suggested} ${selectedArea ? `near ${selectedArea}` : `across ${broadArea}`}. This is not a diagnosis. Choose a clinic and an available time to request the appointment.`
+    setAssistantResult((current) => ({ ...current, message: nextMessage, missing: [] }))
   }
 
   function listenForRequest() {
@@ -354,7 +368,7 @@ function App() {
                 </div>}
 
                 <div className="clinic-list">
-                  {displayedClinics.map((clinic) => <ClinicCard key={clinic.id} clinic={clinic} onBook={openBooking} saved={savedClinics.has(clinic.id)} onSave={() => setSavedClinics((current) => { const next = new Set(current); if (next.has(clinic.id)) { next.delete(clinic.id) } else { next.add(clinic.id) } localStorage.setItem('clinicconnect:saved', JSON.stringify([...next])); return next })} />)}
+                  {displayedClinics.map((clinic) => <ClinicCard key={clinic.id} clinic={clinic} onBook={openBooking} preferredTime={preferredTime} saved={savedClinics.has(clinic.id)} onSave={() => setSavedClinics((current) => { const next = new Set(current); if (next.has(clinic.id)) { next.delete(clinic.id) } else { next.add(clinic.id) } localStorage.setItem('clinicconnect:saved', JSON.stringify([...next])); return next })} />)}
                   {displayedClinics.length === 0 && <div className="empty-state"><Search size={22} /><strong>{directoryError ? 'Live listings could not be loaded' : directorySource === 'osm' && !liveSearch ? 'Search OpenStreetMap listings' : directorySource === 'osm' ? 'No public listings match this search' : 'No matching clinics yet'}</strong><span>{directoryError ? directoryError : directorySource === 'partners' ? 'Check the clinic name, area, selected service, and date. Approved partners can only be booked when they have slots for that day.' : directorySource === 'osm' ? 'Public map coverage and specialty tags can be limited. Try All services, a nearby NCR area, or a clinic name.' : 'Try a clinic or speciality in the selected area.'}</span>{directorySource === 'partners' && !directoryError && <button className="text-button" onClick={() => { setQuery(''); setArea('Any area'); setService('All services') }}>Show all approved partners</button>}</div>}
                 </div>
                 <div className="safety-note"><ShieldCheck size={16} /><span>{directorySource === 'osm' ? <>Listing details © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a>. Listings can be incomplete; verify with providers directly. ClinicConnect does not diagnose or provide treatment advice.</> : 'ClinicConnect helps with appointment booking. It does not diagnose or provide treatment advice.'}</span></div>
@@ -365,7 +379,7 @@ function App() {
                   <div className="assistant-head"><div className="assistant-icon"><Sparkles size={19} /></div><div><h2>Booking assistant</h2><span><i /> Ready to help</span></div><button className="more-button" aria-label="Assistant options">•••</button></div>
                   <div className="assistant-rule" />
                   <div className="bot-message"><div className="bot-avatar"><Sparkles size={14} /></div><div><span className="message-time">JUST NOW</span><p>Hi Sakshi! Tell me what you’re looking for in your own words. You can describe a concern, service, or preferred time.</p></div></div>
-                  {assistantResult && <div className="assistant-response"><span className="response-label">{assistantResult.source === 'demo-rules' ? 'BOOKING SUGGESTION' : 'ASSISTANT'}</span><p>{assistantResult.message}</p>{assistantResult.suggestedService && <div className="suggested-service"><Stethoscope size={15} /><span>Suggested service</span><strong>{assistantResult.suggestedService}</strong><button onClick={useSuggestedService}>{language === 'hi' ? 'क्लिनिक खोजें' : language === 'kn' ? 'ಕ್ಲಿನಿಕ್ ಹುಡುಕಿ' : 'Search clinics'}</button></div>}</div>}
+                  {assistantResult && <div className="assistant-response"><span className="response-label">{assistantResult.source === 'demo-rules' ? 'BOOKING SUGGESTION' : 'ASSISTANT'}</span><p>{assistantResult.message}</p>{assistantResult.missing?.length > 0 && <small className="assistant-followup">{assistantFollowUp(assistantResult.missing, language)}</small>}{assistantResult.suggestedService && <div className="suggested-service"><Stethoscope size={15} /><span>{language === 'hi' ? 'सुझाई गई सेवा' : language === 'kn' ? 'ಸೂಚಿಸಿದ ಸೇವೆ' : 'Suggested service'}</span><strong>{assistantResult.suggestedService}</strong><button onClick={useSuggestedService}>{language === 'hi' ? 'स्वीकृत क्लिनिक खोजें' : language === 'kn' ? 'ಅನುಮೋದಿತ ಕ್ಲಿನಿಕ್ ಹುಡುಕಿ' : 'Search bookable clinics'}</button></div>}</div>}
                   <div className="prompt-label">TRY ASKING</div>
                   <div className="quick-prompts">{quickPrompts.map((prompt) => <button key={prompt} onClick={() => askAssistant(prompt)}>{prompt}<ArrowUpRight size={13} /></button>)}</div>
                   <div className="assistant-compose"><textarea value={assistantText} onChange={(event) => setAssistantText(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); askAssistant() } }} placeholder={language === 'kn' ? 'ನಿಮಗೆ ಏನು ಬೇಕು ಎಂದು ಹೇಳಿ…' : language === 'hi' ? 'आप क्या खोज रहे हैं, बताइए…' : 'Describe what you’re looking for…'} rows={2} aria-label="Describe what you need" /><div className="compose-actions"><span><AudioLines size={15} /> {isListening ? 'Listening…' : `Voice input · ${language === 'en' ? 'English' : language === 'hi' ? 'हिन्दी' : 'ಕನ್ನಡ'}`}</span><button className="voice-button" onClick={listenForRequest} disabled={isListening} aria-label="Speak your request"><Mic size={16} /></button><button disabled={isThinking || !assistantText.trim()} onClick={() => askAssistant()} aria-label="Send message">{isThinking ? <span className="spinner" /> : <ArrowRight size={17} />}</button></div></div>
@@ -454,8 +468,25 @@ function AccountPage({ account, setAccount, onBrowse, onAppointments, onClinicPo
   )
 }
 
-function ClinicCard({ clinic, onBook, saved, onSave }) {
+function slotPreferenceScore(label, preference) {
+  const parseMinutes = (value) => {
+    const match = value.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i)
+    if (!match) return null
+    let hour = Number(match[1]) % 12
+    if (match[3].toLowerCase() === 'pm') hour += 12
+    return hour * 60 + Number(match[2] || 0)
+  }
+  const slotMinutes = parseMinutes(label)
+  if (slotMinutes === null || !preference) return 0
+  const exactMinutes = parseMinutes(preference)
+  if (exactMinutes !== null) return slotMinutes === exactMinutes ? 1 : 0
+  const hour = Math.floor(slotMinutes / 60)
+  return preference === 'morning' ? Number(hour < 12) : preference === 'afternoon' ? Number(hour >= 12 && hour < 17) : Number(hour >= 17)
+}
+
+function ClinicCard({ clinic, onBook, preferredTime, saved, onSave }) {
   const Icon = iconMap[clinic.services[0]] || Stethoscope
+  const slots = preferredTime ? [...clinic.slots].sort((a, b) => slotPreferenceScore(b.time, preferredTime) - slotPreferenceScore(a.time, preferredTime)) : clinic.slots
   return (
     <article className="clinic-card">
       <div className={`clinic-art art-${clinic.accent}`}><div className="art-orbit orbit-one" /><div className="art-orbit orbit-two" /><div className="clinic-art-icon"><Icon size={27} /></div><span className="art-label">{clinic.artLabel}</span></div>
@@ -463,7 +494,7 @@ function ClinicCard({ clinic, onBook, saved, onSave }) {
         <div className="clinic-title-row"><div><div className="clinic-tags"><span className="verified"><ShieldCheck size={12} /> {clinic.source === 'OpenStreetMap' ? 'OSM LISTING' : clinic.source === 'partner' ? 'APPROVED PARTNER' : 'SAMPLE PROFILE'}</span>{clinic.languages?.map((language) => <span key={language} className="language-tag">{language}</span>)}</div><h3>{clinic.name}</h3><p className="clinic-location"><MapPin size={14} /> {clinic.area} <span>·</span> {clinic.address}</p></div><button className={`favorite-button ${saved ? 'saved' : ''}`} aria-label={`${saved ? 'Unsave' : 'Save'} ${clinic.name}`} onClick={onSave}>{saved ? '♥' : '♡'}</button></div>
         <p className="clinic-description">{clinic.description}</p>
         <div className="clinic-meta"><span><Clock3 size={14} /> {clinic.openingLabel}</span><span className="service-label"><Stethoscope size={14} /> {clinic.services.join(' · ')}</span></div>
-        {clinic.source === 'OpenStreetMap' ? <div className="real-data-actions">{clinic.phone && <a href={`tel:${clinic.phone}`}><MessageCircle size={13} /> {clinic.phone}</a>}{clinic.website && <a href={clinic.website} target="_blank" rel="noreferrer">Website <ArrowUpRight size={13} /></a>}<a href={clinic.mapsUrl} target="_blank" rel="noreferrer"><MapPin size={13} /> Directions</a></div> : <><div className="slot-row"><strong>Available times</strong><div className="slot-list">{clinic.slots.length ? clinic.slots.slice(0, 3).map((slot) => <button key={slot.time} onClick={() => onBook(clinic, slot.time)}>{slot.time}</button>) : <span className="no-slots">No slots on this day. Choose another date.</span>}</div></div><button className="view-clinic" disabled={!clinic.slots.length} onClick={() => clinic.slots[0] && onBook(clinic, clinic.slots[0].time)}>{clinic.slots.length ? <>Book first available <ArrowRight size={15} /></> : 'No appointments available'}</button></>}
+        {clinic.source === 'OpenStreetMap' ? <div className="real-data-actions">{clinic.phone && <a href={`tel:${clinic.phone}`}><MessageCircle size={13} /> {clinic.phone}</a>}{clinic.website && <a href={clinic.website} target="_blank" rel="noreferrer">Website <ArrowUpRight size={13} /></a>}<a href={clinic.mapsUrl} target="_blank" rel="noreferrer"><MapPin size={13} /> Directions</a></div> : <><div className="slot-row"><strong>Available times{preferredTime ? ` · ${preferredTime} preferred` : ''}</strong><div className="slot-list">{slots.length ? slots.slice(0, 3).map((slot) => <button key={slot.time} onClick={() => onBook(clinic, slot.time)}>{slot.time}</button>) : <span className="no-slots">No slots on this day. Choose another date.</span>}</div></div><button className="view-clinic" disabled={!slots.length} onClick={() => slots[0] && onBook(clinic, slots[0].time)}>{slots.length ? <>Book first available <ArrowRight size={15} /></> : 'No appointments available'}</button></>}
       </div>
     </article>
   )
