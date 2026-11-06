@@ -176,7 +176,7 @@ async function findOsmClinics(area, service, search) {
   const bounds = areaBounds[matchedArea] || areaBounds[region]
   const categoryTerm = service === 'All services' || !service ? 'clinic' : (terms[service] || service)
   const clinicName = search.trim().slice(0, 100)
-  const placeTerm = clinicName ? `${clinicName} ${categoryTerm}` : categoryTerm
+  const placeTerm = clinicName || categoryTerm
   const normalizedArea = areaName.toLowerCase()
   const areaTerm = ['any area', 'delhi ncr'].includes(normalizedArea) ? (bengaluruArea ? 'Bengaluru' : 'Delhi') : areaName
   const bengaluruNeighborhood = ['Indiranagar', 'Koramangala', 'Whitefield'].includes(matchedArea)

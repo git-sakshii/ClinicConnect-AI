@@ -344,7 +344,7 @@ function App() {
                 </div>
                 {directorySource === 'osm' && <section className="map-panel" aria-label="OpenStreetMap clinic map">
                   <div className="map-heading"><div><strong>Clinic map</strong><span>{clinics.length ? `${clinics.length} public listing${clinics.length === 1 ? '' : 's'} shown` : liveSearch ? 'No matching map pins for this search' : `Map centered on ${!area || area === 'Any area' ? 'Delhi NCR' : area}`}</span></div><MapPin size={17} /></div>
-                  <ClinicMap clinics={clinics} area={area} />
+                  <ClinicMap clinics={clinics} area={area} searched={Boolean(liveSearch)} />
                 </section>}
                 {directoryError && <div className="directory-alert" role="status">{directoryError}</div>}
                 {directorySource !== 'osm' && <div className="date-strip" aria-label="Choose appointment day">
@@ -402,7 +402,7 @@ function MapViewport({ clinics, area }) {
   return null
 }
 
-function ClinicMap({ clinics, area }) {
+function ClinicMap({ clinics, area, searched }) {
   const points = clinics.filter((clinic) => Number.isFinite(clinic.latitude) && Number.isFinite(clinic.longitude))
   return (
     <div className="clinic-map">
@@ -413,7 +413,7 @@ function ClinicMap({ clinics, area }) {
           <Popup><strong>{clinic.name}</strong><br />{clinic.address}<br /><a href={clinic.mapsUrl} target="_blank" rel="noreferrer">Directions</a></Popup>
         </Marker>)}
       </MapContainer>
-      {!points.length && <div className="map-hint">{clinics.length ? 'Location coordinates are not available for these listings.' : 'Click “Search clinics” to find public listings and place pins on the map.'}</div>}
+      {!points.length && <div className="map-hint">{clinics.length ? 'Location coordinates are not available for these listings.' : searched ? 'No mappable listings were returned. Try another area or search term.' : 'Click “Search clinics” to find public listings and place pins on the map.'}</div>}
     </div>
   )
 }
