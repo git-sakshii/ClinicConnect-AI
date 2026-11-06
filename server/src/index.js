@@ -203,6 +203,7 @@ async function findOsmClinics(area, service) {
     return {
       id: `osm-${place.osm_type}-${place.osm_id}`, name: place.name, area: neighborhood,
       address: shortAddress || place.display_name,
+      latitude: lat, longitude: lon,
       services: [category], languages: [], openingLabel: 'Hours not verified',
       description: 'Public OpenStreetMap result. Verify details and availability with the provider before visiting.',
       accent: 'teal', artLabel: category.toUpperCase(), slots: [], source: 'OpenStreetMap',

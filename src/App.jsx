@@ -5,10 +5,18 @@ import {
   MapPin, MessageCircle, Mic, Search, ShieldCheck, Sparkles, Stethoscope, UserRound,
   X,
 } from 'lucide-react'
+import { MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet'
+import 'leaflet/dist/leaflet.css'
 import './App.css'
 
 const iconMap = { Dermatology: Activity, Dentistry: HeartPulse, ENT: Activity, 'General medicine': Stethoscope }
 const quickPrompts = ['I have acne on my face', 'मुझे चेहरे पर मुंहासे हैं', 'Find a dentist tomorrow']
+const areaMapCenters = {
+  'Any area': [12.9716, 77.5946],
+  Indiranagar: [12.9784, 77.6408],
+  Koramangala: [12.9352, 77.6245],
+  Whitefield: [12.9698, 77.75],
+}
 
 function dayLabel(date) {
   return new Intl.DateTimeFormat('en-IN', { weekday: 'short', day: 'numeric' }).format(date)
@@ -317,6 +325,10 @@ function App() {
                   <label>Directory <select value={directorySource} onChange={(event) => { setDirectorySource(event.target.value); setClinics([]); setDirectoryError(''); setLiveSearch(null) }}><option value="osm">Live OpenStreetMap data</option><option value="partners">Approved ClinicConnect partners</option><option value="demo">Sample prototype data</option></select></label>
                   <span>{savedClinics.size} saved</span>
                 </div>
+                {directorySource === 'osm' && <section className="map-panel" aria-label="OpenStreetMap clinic map">
+                  <div className="map-heading"><div><strong>Clinic map</strong><span>{clinics.length ? `${clinics.length} public listing${clinics.length === 1 ? '' : 's'} shown` : liveSearch ? 'No matching map pins for this search' : `Map centered on ${area === 'Any area' ? 'Bengaluru' : area}`}</span></div><MapPin size={17} /></div>
+                  <ClinicMap clinics={clinics} area={area} />
+                </section>}
                 {directoryError && <div className="directory-alert" role="status">{directoryError}</div>}
                 {directorySource !== 'osm' && <div className="date-strip" aria-label="Choose appointment day">
                   <button className="date-arrow" aria-label="Previous dates" onClick={() => setSelectedDay(days[0].key)}><ChevronLeft size={17} /></button>
@@ -356,6 +368,35 @@ function App() {
 
       {bookingClinic && <BookingModal clinic={bookingClinic} slot={bookingSlot} day={selectedDay} service={bookingService} setService={setBookingService} name={patientName} phone={patientPhone} setName={setPatientName} setPhone={setPatientPhone} state={bookingState} error={bookingError} account={account} setAccount={setAccount} onPatientName={setPatientName} onSubmit={submitBooking} onClose={() => { setBookingClinic(null); setBookingState('idle'); setBookingError('') }} onRetry={() => { setBookingState('idle'); setBookingError('') }} />}
       {toast && <div className="toast" role="status"><Check size={16} />{toast}<button onClick={() => setToast('')} aria-label="Dismiss notification"><X size={15} /></button></div>}
+    </div>
+  )
+}
+
+function MapViewport({ clinics, area }) {
+  const map = useMap()
+  useEffect(() => {
+    const points = clinics.filter((clinic) => Number.isFinite(clinic.latitude) && Number.isFinite(clinic.longitude))
+    if (points.length) {
+      map.fitBounds(points.map((clinic) => [clinic.latitude, clinic.longitude]), { padding: [24, 24], maxZoom: 14 })
+    } else {
+      map.setView(areaMapCenters[area] || areaMapCenters['Any area'], 12)
+    }
+  }, [map, clinics, area])
+  return null
+}
+
+function ClinicMap({ clinics, area }) {
+  const points = clinics.filter((clinic) => Number.isFinite(clinic.latitude) && Number.isFinite(clinic.longitude))
+  return (
+    <div className="clinic-map">
+      <MapContainer center={areaMapCenters[area] || areaMapCenters['Any area']} zoom={12} scrollWheelZoom={false}>
+        <MapViewport clinics={clinics} area={area} />
+        <TileLayer url="https://tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>' />
+        {points.map((clinic) => <Marker key={clinic.id} position={[clinic.latitude, clinic.longitude]}>
+          <Popup><strong>{clinic.name}</strong><br />{clinic.address}<br /><a href={clinic.mapsUrl} target="_blank" rel="noreferrer">Directions</a></Popup>
+        </Marker>)}
+      </MapContainer>
+      {!points.length && <div className="map-hint">{clinics.length ? 'Location coordinates are not available for these listings.' : 'Click “Search clinics” to find public listings and place pins on the map.'}</div>}
     </div>
   )
 }
