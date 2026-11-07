@@ -315,9 +315,8 @@ function App() {
 
       <main className="main-area" id="top">
         <header className="topbar">
-          <div className="breadcrumb">Patient workspace <span>/</span> <strong>{viewLabels[activeView]}</strong></div>
+          <div className="breadcrumb"><strong>{viewLabels[activeView]}</strong></div>
           <div className="top-actions">
-            <span className={`demo-pill ${directorySource !== 'demo' ? 'live-pill' : ''}`}><span /> {directorySource === 'osm' ? 'OPENSTREETMAP' : directorySource === 'partners' ? 'PARTNER CLINICS' : 'SAMPLE DATA'}</span>
             <button className="language-button" onClick={() => setLanguage((current) => current === 'en' ? 'hi' : current === 'hi' ? 'kn' : 'en')} aria-label="Switch assistant language"><Languages size={16} /> {language === 'en' ? 'English' : language === 'hi' ? 'हिन्दी' : 'ಕನ್ನಡ'} <ChevronDown size={14} /></button>
             <button className="top-avatar" aria-label={account ? 'Open account profile' : 'Open guest profile'} title={account?.email || 'Guest account'} onClick={() => setActiveView('account')}>{avatarInitials}</button>
           </div>
@@ -375,7 +374,20 @@ function App() {
               </section>
 
               <aside className="assistant-column">
-                <div className="assistant-card">
+                <div className="assistant-card" onPointerMove={(event) => {
+                  if (event.pointerType === 'touch') return
+                  const bounds = event.currentTarget.getBoundingClientRect()
+                  const x = (event.clientX - bounds.left) / bounds.width
+                  const y = (event.clientY - bounds.top) / bounds.height
+                  event.currentTarget.style.setProperty('--tilt-x', `${(0.5 - y) * 1.5}deg`)
+                  event.currentTarget.style.setProperty('--tilt-y', `${(x - 0.5) * 2}deg`)
+                }} onPointerLeave={(event) => {
+                  event.currentTarget.style.setProperty('--tilt-x', '0deg')
+                  event.currentTarget.style.setProperty('--tilt-y', '0deg')
+                }} onPointerUp={(event) => {
+                  event.currentTarget.style.setProperty('--tilt-x', '0deg')
+                  event.currentTarget.style.setProperty('--tilt-y', '0deg')
+                }}>
                   <div className="assistant-head"><div className="assistant-icon"><Sparkles size={19} /></div><div><h2>Booking assistant</h2><span><i /> Ready to help</span></div><button className="more-button" aria-label="Assistant options">•••</button></div>
                   <div className="assistant-rule" />
                   <div className="bot-message"><div className="bot-avatar"><Sparkles size={14} /></div><div><span className="message-time">JUST NOW</span><p>Hi Sakshi! Tell me what you’re looking for in your own words. You can describe a concern, service, or preferred time.</p></div></div>
@@ -487,8 +499,22 @@ function slotPreferenceScore(label, preference) {
 function ClinicCard({ clinic, onBook, preferredTime, saved, onSave }) {
   const Icon = iconMap[clinic.services[0]] || Stethoscope
   const slots = preferredTime ? [...clinic.slots].sort((a, b) => slotPreferenceScore(b.time, preferredTime) - slotPreferenceScore(a.time, preferredTime)) : clinic.slots
+  function handlePointerMove(event) {
+    if (event.pointerType === 'touch') return
+    const bounds = event.currentTarget.getBoundingClientRect()
+    const x = (event.clientX - bounds.left) / bounds.width
+    const y = (event.clientY - bounds.top) / bounds.height
+    event.currentTarget.style.setProperty('--tilt-x', `${(0.5 - y) * 2.2}deg`)
+    event.currentTarget.style.setProperty('--tilt-y', `${(x - 0.5) * 2.8}deg`)
+    event.currentTarget.style.setProperty('--shine-x', `${x * 100}%`)
+    event.currentTarget.style.setProperty('--shine-y', `${y * 100}%`)
+  }
+  function resetTilt(event) {
+    event.currentTarget.style.setProperty('--tilt-x', '0deg')
+    event.currentTarget.style.setProperty('--tilt-y', '0deg')
+  }
   return (
-    <article className="clinic-card">
+    <article className="clinic-card" onPointerMove={handlePointerMove} onPointerLeave={resetTilt} onPointerUp={resetTilt}>
       <div className={`clinic-art art-${clinic.accent}`}><div className="art-orbit orbit-one" /><div className="art-orbit orbit-two" /><div className="clinic-art-icon"><Icon size={27} /></div><span className="art-label">{clinic.artLabel}</span></div>
       <div className="clinic-details">
         <div className="clinic-title-row"><div><div className="clinic-tags"><span className="verified"><ShieldCheck size={12} /> {clinic.source === 'OpenStreetMap' ? 'OSM LISTING' : clinic.source === 'partner' ? 'APPROVED PARTNER' : 'SAMPLE PROFILE'}</span>{clinic.languages?.map((language) => <span key={language} className="language-tag">{language}</span>)}</div><h3>{clinic.name}</h3><p className="clinic-location"><MapPin size={14} /> {clinic.area} <span>·</span> {clinic.address}</p></div><button className={`favorite-button ${saved ? 'saved' : ''}`} aria-label={`${saved ? 'Unsave' : 'Save'} ${clinic.name}`} onClick={onSave}>{saved ? '♥' : '♡'}</button></div>

@@ -27,16 +27,13 @@
 .main-area { width: calc(100% - 248px); min-height: 100vh; margin-left: 248px; }
 .topbar { position: sticky; top: 0; z-index: 4; display: flex; align-items: center; justify-content: space-between; height: 67px; padding: 0 42px; border-bottom: 1px solid #e8edf1; background: rgb(255 255 255 / 92%); backdrop-filter: blur(14px); }
 .breadcrumb { color: #81919e; font-size: 12px; }
-.breadcrumb span { margin: 0 9px; color: #c1cbd2; }
 .breadcrumb strong { color: #344b5d; font-weight: 600; }
 .top-actions { display: flex; align-items: center; gap: 17px; }
-.demo-pill { display: inline-flex; align-items: center; gap: 6px; color: #8897a3; font-size: 9px; font-weight: 800; letter-spacing: .65px; }
-.demo-pill span { width: 6px; height: 6px; border-radius: 50%; background: #e3ae56; }
-.demo-pill.live-pill span { background: #35ac77; box-shadow: 0 0 0 3px #35ac771c; }
 .language-button { display: inline-flex; align-items: center; gap: 7px; padding: 7px 10px; border: 1px solid #e5ebf0; border-radius: 8px; background: #fff; color: #617686; font-size: 11px; font-weight: 600; }
 .language-button svg:first-child { color: var(--teal); }
 .top-avatar { width: 31px; height: 31px; border: 0; background: #dcece8; color: var(--teal-dark); }
 .page-content { max-width: 1510px; margin: 0 auto; padding: 34px 42px 50px; }
+.page-content:has(.welcome-row) { background: radial-gradient(ellipse at 8% 0%,#e6f5f226,transparent 38%); }
 .welcome-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-bottom: 23px; }
 .eyebrow { display: flex; align-items: center; gap: 8px; color: var(--teal-dark); font-size: 9px; font-weight: 800; letter-spacing: 1.1px; }
 .eyebrow-line { display: inline-block; width: 17px; height: 2px; border-radius: 2px; background: #55c1b3; }
@@ -74,8 +71,10 @@ h1,h2,h3 { font-family: 'Segoe UI Variable', 'Segoe UI', sans-serif; }
 .date-chip.selected { border-color: #159c8d; background: #e7f5f1; color: var(--teal-dark); box-shadow: 0 2px 6px #159c8d12; }
 .date-chip.selected span { color: #4f9b91; }
 .clinic-list { display: grid; gap: 12px; }
-.clinic-card { display: grid; grid-template-columns: 158px minmax(0,1fr); min-height: 215px; overflow: hidden; border: 1px solid #e4ebf0; border-radius: 12px; background: #fff; box-shadow: 0 3px 11px #29465b05; transition: .18s ease; }
-.clinic-card:hover { border-color: #ccdedf; box-shadow: 0 7px 22px #29465b0d; transform: translateY(-1px); }
+.clinic-card { --tilt-x: 0deg; --tilt-y: 0deg; --shine-x: 50%; --shine-y: 50%; position: relative; display: grid; grid-template-columns: 158px minmax(0,1fr); min-height: 215px; overflow: hidden; border: 1px solid #e4ebf0; border-radius: 14px; background: #fff; box-shadow: 0 3px 11px #29465b05; transform: perspective(1100px) rotateX(var(--tilt-x)) rotateY(var(--tilt-y)); transform-style: preserve-3d; transition: transform .22s ease, border-color .18s ease, box-shadow .18s ease; }
+.clinic-card::after { position: absolute; z-index: 3; inset: 0; border-radius: inherit; background: radial-gradient(circle at var(--shine-x) var(--shine-y),#ffffff59,transparent 38%); content: ''; opacity: 0; pointer-events: none; transition: opacity .2s ease; }
+.clinic-card:hover { border-color: #ccdedf; box-shadow: 0 14px 30px #29465b13, 0 3px 8px #159c8d0c; }
+.clinic-card:hover::after { opacity: 1; }
 .clinic-art { position: relative; display: flex; overflow: hidden; align-items: center; justify-content: center; min-height: 100%; }
 .art-teal { background: linear-gradient(145deg,#cdebe6,#a7d5cd); color: #0b736e; }
 .art-blue { background: linear-gradient(145deg,#dce8f5,#afcbe2); color: #315f89; }
@@ -131,7 +130,8 @@ h1,h2,h3 { font-family: 'Segoe UI Variable', 'Segoe UI', sans-serif; }
 .safety-note { display: flex; align-items: center; gap: 7px; margin: 14px 1px 0; color: #8b9ba7; font-size: 9px; line-height: 1.45; }
 .safety-note svg { flex: 0 0 auto; color: #66aa9d; }
 .assistant-column { display: grid; gap: 12px; }
-.assistant-card { padding: 17px 15px 12px; border: 1px solid #dfe9ed; border-radius: 13px; background: linear-gradient(160deg,#fff,#fbfefe); box-shadow: 0 6px 17px #27485b07; }
+.assistant-card { --tilt-x: 0deg; --tilt-y: 0deg; padding: 17px 15px 12px; border: 1px solid #dfe9ed; border-radius: 15px; background: radial-gradient(ellipse at 100% 0%,#e7f6f380,transparent 44%),linear-gradient(160deg,#fff,#fbfefe); box-shadow: 0 8px 22px #27485b0a; transform: perspective(1000px) rotateX(var(--tilt-x)) rotateY(var(--tilt-y)); transform-style: preserve-3d; transition: transform .22s ease, box-shadow .2s ease; }
+.assistant-card:hover { box-shadow: 0 15px 32px #27485b12; }
 .assistant-head { display: flex; align-items: center; gap: 10px; }
 .assistant-icon { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 11px; background: #e2f4ef; color: #159c8d; }
 .assistant-head h2 { margin: 0 0 3px; color: var(--navy); font-size: 12px; font-weight: 750; }
@@ -281,4 +281,9 @@ h1,h2,h3 { font-family: 'Segoe UI Variable', 'Segoe UI', sans-serif; }
   line-height: 1.45;
 }
 .ai-consent input { margin-top: 2px; accent-color: #168c80; }
+@media (hover: none) { .clinic-card:active,.assistant-card:active { transform: scale(.995); } }
+@media (prefers-reduced-motion: reduce) {
+  *,*::before,*::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  .clinic-card,.assistant-card { transform: none !important; }
+}
 @media (max-width: 420px) { .auth-tabs { gap: 2px; } .auth-tabs button { padding: 7px 2px; font-size: 8px; } }
