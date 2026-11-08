@@ -202,16 +202,39 @@ function App() {
 
   function listenForRequest() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
-    if (!SpeechRecognition) { setToast('Voice input is not available in this browser. Try Chrome or type your request.'); return }
+    if (!window.isSecureContext) { setToast('Voice input needs a secure page. Use localhost or the deployed HTTPS website.'); return }
+    if (!SpeechRecognition) { setToast('This browser does not support voice input. Try Chrome or Edge, or type your request.'); return }
     const recognition = new SpeechRecognition()
     recognition.lang = language === 'kn' ? 'kn-IN' : language === 'hi' ? 'hi-IN' : 'en-IN'
     recognition.interimResults = false
     recognition.maxAlternatives = 1
     recognition.onstart = () => setIsListening(true)
-    recognition.onresult = (event) => setAssistantText(event.results[0][0].transcript)
-    recognition.onerror = () => { setIsListening(false); setToast('Voice input could not start. Check browser microphone permission or type your request.') }
+    recognition.onresult = (event) => {
+      const transcript = event.results?.[0]?.[0]?.transcript?.trim()
+      if (!transcript) { setToast('I did not catch that. Try speaking again or type your request.'); return }
+      setAssistantText(transcript)
+      void askAssistant(transcript)
+    }
+    recognition.onerror = (event) => {
+      setIsListening(false)
+      const messages = {
+        'not-allowed': 'Microphone access is blocked. Allow microphone access for this site in your browser settings, then try again.',
+        'service-not-allowed': 'The browser speech service is blocked. Check browser permissions or type your request.',
+        'audio-capture': 'No microphone was detected. Connect or enable a microphone, then try again.',
+        'no-speech': 'I did not hear speech. Check your microphone and try again.',
+        network: 'Voice recognition needs an internet connection. Check your connection or type your request.',
+      }
+      setToast(messages[event.error] || 'Voice input could not start. Check microphone permission or type your request.')
+    }
     recognition.onend = () => setIsListening(false)
-    recognition.start()
+    try {
+      recognition.start()
+    } catch (error) {
+      setIsListening(false)
+      setToast(error.name === 'NotAllowedError'
+        ? 'Microphone access is blocked. Allow microphone access for this site in your browser settings, then try again.'
+        : 'Voice input could not start. Check microphone permission or try again.')
+    }
   }
 
   function openBooking(clinic, slot) {
