@@ -656,18 +656,26 @@ async function start() {
     throw new Error('Production requires AUTH_SECRET, MONGODB_URI, ADMIN_EMAIL, and ADMIN_PASSWORD.')
   }
   if (process.env.MONGODB_URI) {
-    client = new MongoClient(process.env.MONGODB_URI)
-    await client.connect()
-    db = client.db(process.env.MONGODB_DATABASE || 'clinicconnect')
-    await db.collection('slots').createIndex({ clinicId: 1, date: 1, time: 1 }, { unique: true })
-    await appointmentCollection().createIndex({ id: 1 }, { unique: true })
-    await appointmentCollection().createIndex({ clinicId: 1, date: 1, time: 1 })
-    await appointmentCollection().createIndex({ patientId: 1, createdAt: -1 })
-    await db.collection('users').createIndex({ email: 1 }, { unique: true })
-    await clinicCollection().createIndex({ id: 1 }, { unique: true })
-    await clinicCollection().createIndex({ ownerId: 1 }, { unique: true, sparse: true })
-    if (await clinicCollection().countDocuments() === 0) await clinicCollection().insertMany(seedClinics.map((clinic) => ({ ...clinic, active: true })))
-    mode = 'mongodb'
+    try {
+      client = new MongoClient(process.env.MONGODB_URI)
+      await client.connect()
+      db = client.db(process.env.MONGODB_DATABASE || 'clinicconnect')
+      await db.collection('slots').createIndex({ clinicId: 1, date: 1, time: 1 }, { unique: true })
+      await appointmentCollection().createIndex({ id: 1 }, { unique: true })
+      await appointmentCollection().createIndex({ clinicId: 1, date: 1, time: 1 })
+      await appointmentCollection().createIndex({ patientId: 1, createdAt: -1 })
+      await db.collection('users').createIndex({ email: 1 }, { unique: true })
+      await clinicCollection().createIndex({ id: 1 }, { unique: true })
+      await clinicCollection().createIndex({ ownerId: 1 }, { unique: true, sparse: true })
+      if (await clinicCollection().countDocuments() === 0) await clinicCollection().insertMany(seedClinics.map((clinic) => ({ ...clinic, active: true })))
+      mode = 'mongodb'
+    } catch (error) {
+      await client?.close().catch(() => {})
+      client = undefined
+      db = undefined
+      if (process.env.NODE_ENV === 'production') throw error
+      console.warn(`MongoDB unavailable; using temporary in-memory demo data: ${error.message}`)
+    }
   } else {
     console.warn('MONGODB_URI is not configured. Starting with temporary in-memory demo data.')
   }

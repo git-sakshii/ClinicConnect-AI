@@ -182,30 +182,22 @@ function App() {
       setAssistantResult(data)
       if (data.language) setLanguage(data.language)
       if (data.area) setArea(data.area)
+      if (data.suggestedService) {
+        setQuery('')
+        setService(data.suggestedService)
+        setPreferredTime(data.preferredTime || null)
+        if (data.preferredDate && days.some((day) => day.key === data.preferredDate)) setSelectedDay(data.preferredDate)
+        if (directorySource === 'osm') {
+          setLiveSearch({ query: '', area: data.area || area, service: data.suggestedService, requestedAt: Date.now() })
+        } else {
+          setLiveSearch(null)
+        }
+      }
     } catch {
-      setAssistantResult({ message: 'I could not understand that just now. Try a clinic service name, or use the search filters.', source: 'fallback' })
+      setAssistantResult({ message: 'The assistant service could not be reached. Make sure the API server is running, then try again.', source: 'fallback' })
     } finally {
       setIsThinking(false)
     }
-  }
-
-  function useSuggestedService() {
-    const suggested = assistantResult?.suggestedService
-    if (!suggested) return
-    setQuery('')
-    setLiveSearch(null)
-    setService(suggested)
-    setDirectorySource('partners')
-    setPreferredTime(assistantResult.preferredTime || null)
-    if (assistantResult.preferredDate && days.some((day) => day.key === assistantResult.preferredDate)) setSelectedDay(assistantResult.preferredDate)
-    const selectedArea = assistantResult.area || (area && area !== 'Any area' ? area : null)
-    const broadArea = language === 'hi' ? 'सभी स्वीकृत क्लिनिक क्षेत्रों' : language === 'kn' ? 'ಎಲ್ಲಾ ಅನುಮೋದಿತ ಕ್ಲಿನಿಕ್ ಪ್ರದೇಶಗಳು' : 'all approved partner areas'
-    const nextMessage = language === 'hi'
-      ? `मैं ${selectedArea ? `${selectedArea} के पास` : broadArea} में ${suggested} सेवा देने वाले स्वीकृत क्लिनिक खोज रहा हूँ। यह निदान नहीं है। नज़दीकी परिणामों के लिए क्षेत्र चुनें; फिर क्लिनिक और उपलब्ध समय में से चुनें।`
-      : language === 'kn'
-        ? `${selectedArea ? `${selectedArea} ಹತ್ತಿರ` : broadArea} ${suggested} ಸೇವೆಯ ಅನುಮೋದಿತ ಕ್ಲಿನಿಕ್‌ಗಳನ್ನು ಹುಡುಕುತ್ತಿದ್ದೇನೆ. ಇದು ರೋಗನಿರ್ಣಯವಲ್ಲ. ಹತ್ತಿರದ ಫಲಿತಾಂಶಗಳಿಗೆ ಪ್ರದೇಶವನ್ನು ಆರಿಸಿ; ನಂತರ ಕ್ಲಿನಿಕ್ ಮತ್ತು ಸಮಯವನ್ನು ಆಯ್ಕೆಮಾಡಿ.`
-        : `Searching approved, bookable clinics that list ${suggested} ${selectedArea ? `near ${selectedArea}` : `across ${broadArea}`}. This is not a diagnosis. Choose a clinic and an available time to request the appointment.`
-    setAssistantResult((current) => ({ ...current, message: nextMessage, missing: [] }))
   }
 
   function listenForRequest() {
@@ -368,7 +360,7 @@ function App() {
 
                 <div className="clinic-list">
                   {displayedClinics.map((clinic) => <ClinicCard key={clinic.id} clinic={clinic} onBook={openBooking} preferredTime={preferredTime} saved={savedClinics.has(clinic.id)} onSave={() => setSavedClinics((current) => { const next = new Set(current); if (next.has(clinic.id)) { next.delete(clinic.id) } else { next.add(clinic.id) } localStorage.setItem('clinicconnect:saved', JSON.stringify([...next])); return next })} />)}
-                  {displayedClinics.length === 0 && <div className="empty-state"><Search size={22} /><strong>{directoryError ? 'Live listings could not be loaded' : directorySource === 'osm' && !liveSearch ? 'Search OpenStreetMap listings' : directorySource === 'osm' ? 'No public listings match this search' : 'No matching clinics yet'}</strong><span>{directoryError ? directoryError : directorySource === 'partners' ? 'Check the clinic name, area, selected service, and date. Approved partners can only be booked when they have slots for that day.' : directorySource === 'osm' ? 'Public map coverage and specialty tags can be limited. Try All services, a nearby NCR area, or a clinic name.' : 'Try a clinic or speciality in the selected area.'}</span>{directorySource === 'partners' && !directoryError && <button className="text-button" onClick={() => { setQuery(''); setArea('Any area'); setService('All services') }}>Show all approved partners</button>}</div>}
+                  {displayedClinics.length === 0 && <div className="empty-state"><Search size={22} /><strong>{directoryError ? 'Live listings could not be loaded' : directorySource === 'osm' && !liveSearch ? 'Search OpenStreetMap listings' : directorySource === 'osm' ? 'No public listings match this search' : 'No matching clinics yet'}</strong><span>{directoryError ? directoryError : directorySource === 'partners' ? 'Check the clinic name, area, selected service, and date. Approved partners can only be booked when they have slots for that day.' : directorySource === 'osm' ? 'Public map coverage and specialty tags can be limited. Try All services, a nearby NCR area, or a clinic name.' : 'Try a clinic or speciality in the selected area.'}</span>{directorySource === 'osm' && liveSearch && service !== 'All services' && <button className="text-button" onClick={() => { setDirectorySource('demo'); setLiveSearch(null); setQuery(''); setRefreshKey((value) => value + 1) }}>Show sample {service.toLowerCase()} clinic profiles</button>}{directorySource === 'partners' && !directoryError && <button className="text-button" onClick={() => { setQuery(''); setArea('Any area'); setService('All services') }}>Show all approved partners</button>}</div>}
                 </div>
                 <div className="safety-note"><ShieldCheck size={16} /><span>{directorySource === 'osm' ? <>Listing details © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a>. Listings can be incomplete; verify with providers directly. ClinicConnect does not diagnose or provide treatment advice.</> : 'ClinicConnect helps with appointment booking. It does not diagnose or provide treatment advice.'}</span></div>
               </section>
@@ -391,7 +383,7 @@ function App() {
                   <div className="assistant-head"><div className="assistant-icon"><Sparkles size={19} /></div><div><h2>Booking assistant</h2><span><i /> Ready to help</span></div><button className="more-button" aria-label="Assistant options">•••</button></div>
                   <div className="assistant-rule" />
                   <div className="bot-message"><div className="bot-avatar"><Sparkles size={14} /></div><div><span className="message-time">JUST NOW</span><p>Hi Sakshi! Tell me what you’re looking for in your own words. You can describe a concern, service, or preferred time.</p></div></div>
-                  {assistantResult && <div className="assistant-response"><span className="response-label">{assistantResult.source === 'demo-rules' ? 'BOOKING SUGGESTION' : 'ASSISTANT'}</span><p>{assistantResult.message}</p>{assistantResult.missing?.length > 0 && <small className="assistant-followup">{assistantFollowUp(assistantResult.missing, language)}</small>}{assistantResult.suggestedService && <div className="suggested-service"><Stethoscope size={15} /><span>{language === 'hi' ? 'सुझाई गई सेवा' : language === 'kn' ? 'ಸೂಚಿಸಿದ ಸೇವೆ' : 'Suggested service'}</span><strong>{assistantResult.suggestedService}</strong><button onClick={useSuggestedService}>{language === 'hi' ? 'स्वीकृत क्लिनिक खोजें' : language === 'kn' ? 'ಅನುಮೋದಿತ ಕ್ಲಿನಿಕ್ ಹುಡುಕಿ' : 'Search bookable clinics'}</button></div>}</div>}
+                  {assistantResult && <div className="assistant-response"><span className="response-label">{assistantResult.source === 'demo-rules' ? 'BOOKING SUGGESTION' : 'ASSISTANT'}</span><p>{assistantResult.message}</p>{assistantResult.missing?.length > 0 && <small className="assistant-followup">{assistantFollowUp(assistantResult.missing, language)}</small>}{assistantResult.suggestedService && <div className="suggested-service"><Stethoscope size={15} /><span>{language === 'hi' ? 'सुझाई गई सेवा' : language === 'kn' ? 'ಸೂಚಿಸಿದ ಸೇವೆ' : 'Suggested service'}</span><strong>{assistantResult.suggestedService}</strong><small className="search-applied-note">{directorySource === 'osm' ? 'Public map listings are filtered below. These are not bookable through ClinicConnect.' : directorySource === 'partners' ? 'Approved clinic results are filtered below.' : 'Sample clinic results are filtered below.'}</small></div>}</div>}
                   <div className="prompt-label">TRY ASKING</div>
                   <div className="quick-prompts">{quickPrompts.map((prompt) => <button key={prompt} onClick={() => askAssistant(prompt)}>{prompt}<ArrowUpRight size={13} /></button>)}</div>
                   <div className="assistant-compose"><textarea value={assistantText} onChange={(event) => setAssistantText(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); askAssistant() } }} placeholder={language === 'kn' ? 'ನಿಮಗೆ ಏನು ಬೇಕು ಎಂದು ಹೇಳಿ…' : language === 'hi' ? 'आप क्या खोज रहे हैं, बताइए…' : 'Describe what you’re looking for…'} rows={2} aria-label="Describe what you need" /><div className="compose-actions"><span><AudioLines size={15} /> {isListening ? 'Listening…' : `Voice input · ${language === 'en' ? 'English' : language === 'hi' ? 'हिन्दी' : 'ಕನ್ನಡ'}`}</span><button className="voice-button" onClick={listenForRequest} disabled={isListening} aria-label="Speak your request"><Mic size={16} /></button><button disabled={isThinking || !assistantText.trim()} onClick={() => askAssistant()} aria-label="Send message">{isThinking ? <span className="spinner" /> : <ArrowRight size={17} />}</button></div></div>
