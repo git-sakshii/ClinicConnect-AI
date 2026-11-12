@@ -2,8 +2,10 @@ import app from '../server/src/index.js'
 
 export default function handler(request, response) {
   const route = request.query.path
-  const segments = Array.isArray(route) ? route : [route]
-  const pathname = segments.filter(Boolean).map((segment) => encodeURIComponent(segment)).join('/')
+  const segments = (Array.isArray(route) ? route : [route || ''])
+    .flatMap((segment) => String(segment).split('/'))
+    .filter(Boolean)
+  const pathname = segments.map((segment) => encodeURIComponent(segment)).join('/')
   const query = new URLSearchParams()
 
   for (const [key, value] of Object.entries(request.query)) {
