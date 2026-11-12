@@ -652,7 +652,8 @@ app.use((error, _request, response, _next) => {
 })
 
 async function start() {
-  if (process.env.NODE_ENV === 'production' && (!process.env.AUTH_SECRET || !process.env.MONGODB_URI || !process.env.ADMIN_EMAIL || !process.env.ADMIN_PASSWORD)) {
+  const demoMode = process.env.CLINICCONNECT_DEMO_MODE === 'true'
+  if (process.env.NODE_ENV === 'production' && !demoMode && (!process.env.AUTH_SECRET || !process.env.MONGODB_URI || !process.env.ADMIN_EMAIL || !process.env.ADMIN_PASSWORD)) {
     throw new Error('Production requires AUTH_SECRET, MONGODB_URI, ADMIN_EMAIL, and ADMIN_PASSWORD.')
   }
   if (process.env.MONGODB_URI) {
@@ -673,16 +674,19 @@ async function start() {
       await client?.close().catch(() => {})
       client = undefined
       db = undefined
-      if (process.env.NODE_ENV === 'production') throw error
+      if (process.env.NODE_ENV === 'production' && !demoMode) throw error
       console.warn(`MongoDB unavailable; using temporary in-memory demo data: ${error.message}`)
     }
   } else {
     console.warn('MONGODB_URI is not configured. Starting with temporary in-memory demo data.')
   }
-  app.listen(PORT, () => console.log(`ClinicConnect API listening on http://localhost:${PORT} (${mode})`))
+  if (process.env.VERCEL !== '1') app.listen(PORT, () => console.log(`ClinicConnect API listening on http://localhost:${PORT} (${mode})`))
 }
 
-start().catch((error) => {
+if (process.env.VERCEL === '1') await start()
+else start().catch((error) => {
   console.error('API startup failed:', error.message)
   process.exit(1)
 })
+
+export default app
