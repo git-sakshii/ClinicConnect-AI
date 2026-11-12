@@ -231,6 +231,12 @@ h1,h2,h3 { font-family: 'Segoe UI Variable', 'Segoe UI', sans-serif; }
 .confirm-button:hover { background: #dff3eb; }
 .modal-backdrop { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; overflow-y: auto; padding: 20px; background: #10243ab3; backdrop-filter: blur(4px); }
 .booking-modal { width: min(100%,440px); padding: 24px 25px 18px; border: 1px solid #e5edf1; border-radius: 16px; background: #fff; box-shadow: 0 25px 75px #0c24374d; animation: modal-in .18s ease-out; }
+.support-modal { width: min(100%,560px); max-height: min(88vh,720px); overflow-y: auto; }
+.support-topics { display: grid; gap: 10px; margin-top: 18px; }
+.support-topics article { padding: 12px 13px; border: 1px solid #e6edf1; border-radius: 10px; background: #fbfdfd; }
+.support-topics strong { color: #29485e; font-size: 11px; }
+.support-topics p,.support-contact-note { margin: 5px 0 0; color: #758995; font-size: 10px; line-height: 1.6; }
+.support-contact-note { margin-top: 13px; }
 @keyframes modal-in { from { opacity: 0; transform: translateY(9px) scale(.99); } to { opacity: 1; transform: none; } }
 .modal-top { display: flex; align-items: center; justify-content: space-between; }
 .modal-kicker { display: inline-flex; align-items: center; gap: 7px; color: var(--teal-dark); font-size: 9px; font-weight: 800; letter-spacing: .8px; }

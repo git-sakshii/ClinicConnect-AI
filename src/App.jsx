@@ -11,6 +11,68 @@ import './App.css'
 
 const iconMap = { Dermatology: Activity, Dentistry: HeartPulse, ENT: Activity, 'General medicine': Stethoscope }
 const quickPrompts = ['I have acne on my face', 'मुझे चेहरे पर मुंहासे हैं', 'मेरे कान में दर्द है', 'Find a dentist tomorrow']
+const uiCopy = {
+  en: {
+    navDiscover: 'Find a clinic', navAppointments: 'My appointments', navClinic: 'Clinic portal', account: 'Account & profile',
+    sidebarCaption: 'YOUR CARE, CONNECTED', needHelp: 'Need a hand?', helpIntro: 'Our team is happy to help you book.', getSupport: 'Get support',
+    eyebrow: 'A CALMER WAY TO FIND CARE', title: 'Find care near you', welcome: 'Tell us what you need. We’ll help you find a clinic and a time that works.',
+    guestWelcome: 'You’re browsing as a guest.', clinicName: 'Clinic name (optional)', searchPlaceholder: 'Search a clinic, service, or concern', area: 'Type an area', search: 'Search clinics',
+    osmGuidance: 'Search public map listings by area and service; a clinic name is optional. These listings do not include bookable slots.',
+    partnersGuidance: 'Search clinics registered and approved on ClinicConnect. Their published availability can be requested for booking.',
+    demoGuidance: 'Search sample clinics and sample appointment slots for the prototype. Sample bookings do not contact a real clinic.',
+    clinicsNear: 'Clinics near', clinicsDirectory: 'Clinics in the directory', osmSub: 'OpenStreetMap listings · contact clinics to confirm details and appointments',
+    partnersSub: 'Approved clinics · times entered by clinic operators', demoSub: 'Sample profiles · availability shown for your selected day',
+    filterService: 'Filter by service', directory: 'Directory', saved: 'saved', map: 'Clinic map', publicListings: 'public listings shown', noPins: 'No matching map pins for this search',
+    mapCentered: 'Map centered on', assistant: 'Booking assistant', ready: 'Ready to help', assistantIntro: 'Hi! Tell me what you’re looking for in your own words. You can describe a concern, service, or preferred time.',
+    tryAsking: 'TRY ASKING', compose: 'Describe what you’re looking for…', describeNeed: 'Describe what you need', listening: 'Listening…', voice: 'Voice input', speak: 'Speak your request', send: 'Send message',
+    whatsappTitle: 'Prefer to talk?', whatsappText: 'WhatsApp voice booking is on our roadmap.',
+    supportTitle: 'Support & quick help', supportIntro: 'A few tips to help you use ClinicConnect.', supportClose: 'Close support',
+    helpSearchTitle: 'Find and book care', helpSearch: 'Use the directory selector to search public map listings, approved clinic partners, or sample clinics. Only approved partners and sample profiles offer booking in this prototype.',
+    helpAssistantTitle: 'Use the assistant', helpAssistant: 'Describe a concern or service in English, Hindi, or Kannada. The assistant can suggest a clinic service, but it does not diagnose or recommend treatment.',
+    helpClinicTitle: 'Clinic registration', helpClinic: 'Clinics can apply through the Clinic portal. A platform administrator must approve a clinic before it appears as a partner.',
+    supportUnavailable: 'Direct support contact details have not been configured in this prototype.',
+  },
+  hi: {
+    navDiscover: 'क्लिनिक खोजें', navAppointments: 'मेरी अपॉइंटमेंट', navClinic: 'क्लिनिक पोर्टल', account: 'खाता और प्रोफ़ाइल',
+    sidebarCaption: 'आपकी देखभाल, एक साथ', needHelp: 'मदद चाहिए?', helpIntro: 'बुकिंग में हमारी टीम आपकी मदद करेगी।', getSupport: 'सहायता देखें',
+    eyebrow: 'देखभाल पाने का आसान तरीका', title: 'अपने पास इलाज खोजें', welcome: 'अपनी ज़रूरत बताइए। हम आपके लिए क्लिनिक और सही समय खोजेंगे।',
+    guestWelcome: 'आप अतिथि के रूप में देख रहे हैं।', clinicName: 'क्लिनिक का नाम (वैकल्पिक)', searchPlaceholder: 'क्लिनिक, सेवा या समस्या खोजें', area: 'इलाका लिखें', search: 'क्लिनिक खोजें',
+    osmGuidance: 'इलाके और सेवा के अनुसार सार्वजनिक मानचित्र सूची खोजें; क्लिनिक का नाम वैकल्पिक है। इन सूचियों में बुकिंग स्लॉट नहीं होते।',
+    partnersGuidance: 'ClinicConnect पर पंजीकृत और स्वीकृत क्लिनिक खोजें। उनकी उपलब्धता के लिए बुकिंग अनुरोध भेज सकते हैं।',
+    demoGuidance: 'प्रोटोटाइप के नमूना क्लिनिक और अपॉइंटमेंट स्लॉट खोजें। नमूना बुकिंग किसी वास्तविक क्लिनिक तक नहीं जाती।',
+    clinicsNear: 'पास के क्लिनिक:', clinicsDirectory: 'डायरेक्टरी के क्लिनिक', osmSub: 'OpenStreetMap सूची · जानकारी और अपॉइंटमेंट की पुष्टि क्लिनिक से करें',
+    partnersSub: 'स्वीकृत क्लिनिक · समय क्लिनिक संचालकों द्वारा जोड़े गए', demoSub: 'नमूना प्रोफ़ाइल · चुने गए दिन की उपलब्धता',
+    filterService: 'सेवा के अनुसार छाँटें', directory: 'डायरेक्टरी', saved: 'सहेजे गए', map: 'क्लिनिक मानचित्र', publicListings: 'सार्वजनिक स्थान दिखाए गए', noPins: 'इस खोज के लिए मानचित्र पर स्थान नहीं मिले',
+    mapCentered: 'मानचित्र का केंद्र:', assistant: 'बुकिंग सहायक', ready: 'मदद के लिए तैयार', assistantIntro: 'नमस्ते! अपनी ज़रूरत अपने शब्दों में बताइए। समस्या, सेवा या पसंदीदा समय बता सकते हैं।',
+    tryAsking: 'ऐसे पूछें', compose: 'बताइए आप क्या खोज रहे हैं…', describeNeed: 'अपनी ज़रूरत बताइए', listening: 'सुन रहे हैं…', voice: 'आवाज़ से पूछें', speak: 'अपनी बात बोलें', send: 'संदेश भेजें',
+    whatsappTitle: 'बात करना पसंद है?', whatsappText: 'WhatsApp वॉइस बुकिंग भविष्य की योजना में है।',
+    supportTitle: 'सहायता और त्वरित जानकारी', supportIntro: 'ClinicConnect इस्तेमाल करने के लिए कुछ सुझाव।', supportClose: 'सहायता बंद करें',
+    helpSearchTitle: 'देखभाल खोजें और बुक करें', helpSearch: 'सार्वजनिक मानचित्र सूची, स्वीकृत क्लिनिक पार्टनर या नमूना क्लिनिक खोजने के लिए डायरेक्टरी चुनें। इस प्रोटोटाइप में केवल स्वीकृत पार्टनर और नमूना प्रोफ़ाइल बुकिंग देती हैं।',
+    helpAssistantTitle: 'सहायक का उपयोग करें', helpAssistant: 'समस्या या सेवा अंग्रेज़ी, हिंदी या कन्नड़ में बताइए। सहायक सेवा सुझा सकता है, लेकिन बीमारी का निदान या इलाज नहीं बताता।',
+    helpClinicTitle: 'क्लिनिक पंजीकरण', helpClinic: 'क्लिनिक पोर्टल से आवेदन करें। पार्टनर के रूप में दिखने से पहले प्लेटफ़ॉर्म एडमिन की मंज़ूरी ज़रूरी है।',
+    supportUnavailable: 'इस प्रोटोटाइप में सीधे सहायता संपर्क की जानकारी अभी उपलब्ध नहीं है।',
+  },
+  kn: {
+    navDiscover: 'ಕ್ಲಿನಿಕ್ ಹುಡುಕಿ', navAppointments: 'ನನ್ನ ಅಪಾಯಿಂಟ್‌ಮೆಂಟ್‌ಗಳು', navClinic: 'ಕ್ಲಿನಿಕ್ ಪೋರ್ಟಲ್', account: 'ಖಾತೆ ಮತ್ತು ಪ್ರೊಫೈಲ್',
+    sidebarCaption: 'ನಿಮ್ಮ ಆರೈಕೆ, ಒಂದೇ ಕಡೆ', needHelp: 'ಸಹಾಯ ಬೇಕೇ?', helpIntro: 'ಬುಕಿಂಗ್ ಮಾಡಲು ನಮ್ಮ ತಂಡ ಸಹಾಯ ಮಾಡುತ್ತದೆ.', getSupport: 'ಸಹಾಯ ಪಡೆಯಿರಿ',
+    eyebrow: 'ಆರೈಕೆ ಹುಡುಕುವ ಸುಲಭ ಮಾರ್ಗ', title: 'ನಿಮ್ಮ ಹತ್ತಿರ ಆರೈಕೆ ಹುಡುಕಿ', welcome: 'ನಿಮಗೆ ಏನು ಬೇಕೆಂದು ತಿಳಿಸಿ. ಸೂಕ್ತ ಕ್ಲಿನಿಕ್ ಮತ್ತು ಸಮಯ ಹುಡುಕಲು ನಾವು ಸಹಾಯ ಮಾಡುತ್ತೇವೆ.',
+    guestWelcome: 'ನೀವು ಅತಿಥಿಯಾಗಿ ಬ್ರೌಸ್ ಮಾಡುತ್ತಿದ್ದೀರಿ.', clinicName: 'ಕ್ಲಿನಿಕ್ ಹೆಸರು (ಐಚ್ಛಿಕ)', searchPlaceholder: 'ಕ್ಲಿನಿಕ್, ಸೇವೆ ಅಥವಾ ಸಮಸ್ಯೆ ಹುಡುಕಿ', area: 'ಪ್ರದೇಶ ನಮೂದಿಸಿ', search: 'ಕ್ಲಿನಿಕ್ ಹುಡುಕಿ',
+    osmGuidance: 'ಪ್ರದೇಶ ಮತ್ತು ಸೇವೆಯ ಆಧಾರದ ಮೇಲೆ ಸಾರ್ವಜನಿಕ ನಕ್ಷೆ ಪಟ್ಟಿಗಳನ್ನು ಹುಡುಕಿ; ಕ್ಲಿನಿಕ್ ಹೆಸರು ಐಚ್ಛಿಕ. ಈ ಪಟ್ಟಿಗಳಲ್ಲಿ ಬುಕಿಂಗ್ ಸಮಯಗಳು ಇರುವುದಿಲ್ಲ.',
+    partnersGuidance: 'ClinicConnect ನಲ್ಲಿ ನೋಂದಾಯಿಸಿ ಅನುಮೋದಿಸಲಾದ ಕ್ಲಿನಿಕ್‌ಗಳನ್ನು ಹುಡುಕಿ. ಪ್ರಕಟಿಸಿದ ಲಭ್ಯತೆಗೆ ಬುಕಿಂಗ್ ವಿನಂತಿಸಬಹುದು.',
+    demoGuidance: 'ಮಾದರಿ ಕ್ಲಿನಿಕ್‌ಗಳು ಮತ್ತು ಅಪಾಯಿಂಟ್‌ಮೆಂಟ್ ಸಮಯಗಳನ್ನು ಹುಡುಕಿ. ಮಾದರಿ ಬುಕಿಂಗ್ ನೈಜ ಕ್ಲಿನಿಕ್‌ಗೆ ತಲುಪುವುದಿಲ್ಲ.',
+    clinicsNear: 'ಹತ್ತಿರದ ಕ್ಲಿನಿಕ್‌ಗಳು:', clinicsDirectory: 'ಡೈರೆಕ್ಟರಿಯಲ್ಲಿರುವ ಕ್ಲಿನಿಕ್‌ಗಳು', osmSub: 'OpenStreetMap ಪಟ್ಟಿ · ವಿವರ ಮತ್ತು ಸಮಯವನ್ನು ಕ್ಲಿನಿಕ್‌ನೊಂದಿಗೆ ದೃಢಪಡಿಸಿ',
+    partnersSub: 'ಅನುಮೋದಿತ ಕ್ಲಿನಿಕ್‌ಗಳು · ಕ್ಲಿನಿಕ್ ಸಿಬ್ಬಂದಿ ನಮೂದಿಸಿದ ಸಮಯಗಳು', demoSub: 'ಮಾದರಿ ಪ್ರೊಫೈಲ್‌ಗಳು · ಆಯ್ಕೆ ಮಾಡಿದ ದಿನದ ಲಭ್ಯತೆ',
+    filterService: 'ಸೇವೆಯಂತೆ ಫಿಲ್ಟರ್ ಮಾಡಿ', directory: 'ಡೈರೆಕ್ಟರಿ', saved: 'ಉಳಿಸಲಾಗಿದೆ', map: 'ಕ್ಲಿನಿಕ್ ನಕ್ಷೆ', publicListings: 'ಸಾರ್ವಜನಿಕ ಪಟ್ಟಿಗಳು ಕಾಣುತ್ತಿವೆ', noPins: 'ಈ ಹುಡುಕಾಟಕ್ಕೆ ನಕ್ಷೆ ಸ್ಥಳಗಳು ಸಿಗಲಿಲ್ಲ',
+    mapCentered: 'ನಕ್ಷೆಯ ಕೇಂದ್ರ:', assistant: 'ಬುಕಿಂಗ್ ಸಹಾಯಕ', ready: 'ಸಹಾಯಕ್ಕೆ ಸಿದ್ಧ', assistantIntro: 'ನಮಸ್ಕಾರ! ನಿಮಗೆ ಏನು ಬೇಕೆಂದು ನಿಮ್ಮದೇ ಮಾತಿನಲ್ಲಿ ತಿಳಿಸಿ. ಸಮಸ್ಯೆ, ಸೇವೆ ಅಥವಾ ಸಮಯವನ್ನು ಹೇಳಬಹುದು.',
+    tryAsking: 'ಹೀಗೆ ಕೇಳಿ', compose: 'ನೀವು ಏನು ಹುಡುಕುತ್ತಿದ್ದೀರಿ ಎಂದು ತಿಳಿಸಿ…', describeNeed: 'ನಿಮ್ಮ ಅಗತ್ಯವನ್ನು ವಿವರಿಸಿ', listening: 'ಕೇಳುತ್ತಿದ್ದೇನೆ…', voice: 'ಧ್ವನಿ ಇನ್‌ಪುಟ್', speak: 'ನಿಮ್ಮ ವಿನಂತಿ ಹೇಳಿ', send: 'ಸಂದೇಶ ಕಳುಹಿಸಿ',
+    whatsappTitle: 'ಮಾತನಾಡಲು ಇಷ್ಟವೇ?', whatsappText: 'WhatsApp ಧ್ವನಿ ಬುಕಿಂಗ್ ಮುಂದಿನ ಯೋಜನೆಯಲ್ಲಿದೆ.',
+    supportTitle: 'ಸಹಾಯ ಮತ್ತು ತ್ವರಿತ ಮಾಹಿತಿ', supportIntro: 'ClinicConnect ಬಳಸಲು ಕೆಲವು ಸಲಹೆಗಳು.', supportClose: 'ಸಹಾಯ ಮುಚ್ಚಿ',
+    helpSearchTitle: 'ಆರೈಕೆ ಹುಡುಕಿ ಮತ್ತು ಬುಕ್ ಮಾಡಿ', helpSearch: 'ಸಾರ್ವಜನಿಕ ನಕ್ಷೆ ಪಟ್ಟಿ, ಅನುಮೋದಿತ ಕ್ಲಿನಿಕ್ ಪಾಲುದಾರರು ಅಥವಾ ಮಾದರಿ ಕ್ಲಿನಿಕ್‌ಗಳನ್ನು ಹುಡುಕಲು ಡೈರೆಕ್ಟರಿ ಆಯ್ಕೆಮಾಡಿ. ಈ ಮಾದರಿಯಲ್ಲಿ ಅನುಮೋದಿತ ಪಾಲುದಾರರು ಮತ್ತು ಮಾದರಿ ಪ್ರೊಫೈಲ್‌ಗಳಲ್ಲಿ ಮಾತ್ರ ಬುಕಿಂಗ್ ಸಾಧ್ಯ.',
+    helpAssistantTitle: 'ಸಹಾಯಕ ಬಳಕೆ', helpAssistant: 'ಸಮಸ್ಯೆ ಅಥವಾ ಸೇವೆಯನ್ನು ಇಂಗ್ಲಿಷ್, ಹಿಂದಿ ಅಥವಾ ಕನ್ನಡದಲ್ಲಿ ವಿವರಿಸಿ. ಸಹಾಯಕ ಸೇವೆಯನ್ನು ಸೂಚಿಸಬಹುದು; ರೋಗನಿರ್ಣಯ ಅಥವಾ ಚಿಕಿತ್ಸೆ ನೀಡುವುದಿಲ್ಲ.',
+    helpClinicTitle: 'ಕ್ಲಿನಿಕ್ ನೋಂದಣಿ', helpClinic: 'ಕ್ಲಿನಿಕ್ ಪೋರ್ಟಲ್ ಮೂಲಕ ಅರ್ಜಿ ಸಲ್ಲಿಸಿ. ಪಾಲುದಾರರಾಗಿ ಕಾಣಲು ಪ್ಲಾಟ್‌ಫಾರ್ಮ್ ನಿರ್ವಾಹಕರ ಅನುಮೋದನೆ ಅಗತ್ಯ.',
+    supportUnavailable: 'ಈ ಮಾದರಿಯಲ್ಲಿ ನೇರ ಸಹಾಯ ಸಂಪರ್ಕದ ವಿವರಗಳನ್ನು ಇನ್ನೂ ಸೇರಿಸಿಲ್ಲ.',
+  },
+}
 function assistantFollowUp(missing, language) {
   if (language === 'hi') {
     const labels = { date: 'तारीख', time: 'समय', area: 'क्षेत्र' }
@@ -71,6 +133,7 @@ function App() {
   const [preferredTime, setPreferredTime] = useState(null)
   const [assistantText, setAssistantText] = useState('')
   const [language, setLanguage] = useState('en')
+  const [showSupport, setShowSupport] = useState(false)
   const [isListening, setIsListening] = useState(false)
   const [assistantResult, setAssistantResult] = useState(null)
   const [isThinking, setIsThinking] = useState(false)
@@ -85,6 +148,7 @@ function App() {
   const [bookingState, setBookingState] = useState('idle')
   const [bookingError, setBookingError] = useState('')
   const [toast, setToast] = useState('')
+  const copy = uiCopy[language] || uiCopy.en
   const days = useMemo(() => nextDays(), [])
   const displayedClinics = useMemo(() => {
     if (directorySource !== 'osm' || !query.trim()) return clinics
@@ -168,7 +232,6 @@ function App() {
     const requestLanguage = /[\u0900-\u097F]/.test(clean) || /\b(mujhe|mere|meri|mera|chehre|chehra|kaan|kan|dard|dane|daane|khujli|kal|aaj|subah|shaam|sham|chahiye)\b/i.test(clean)
       ? 'hi'
       : /[\u0C80-\u0CFF]/.test(clean) ? 'kn' : /[a-z]/i.test(clean) ? 'en' : language
-    setLanguage(requestLanguage)
     setAssistantText(clean)
     setAssistantResult(null)
     setIsThinking(true)
@@ -180,7 +243,6 @@ function App() {
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || 'Assistant is unavailable')
       setAssistantResult(data)
-      if (data.language) setLanguage(data.language)
       if (data.area) setArea(data.area)
       if (data.suggestedService) {
         setQuery('')
@@ -289,11 +351,11 @@ function App() {
   }
 
   const navigation = [
-    { id: 'discover', label: 'Find a clinic', icon: Search },
-    { id: 'appointments', label: 'My appointments', icon: CalendarDays },
-    { id: 'clinic', label: 'Clinic portal', icon: Stethoscope },
+    { id: 'discover', label: copy.navDiscover, icon: Search },
+    { id: 'appointments', label: copy.navAppointments, icon: CalendarDays },
+    { id: 'clinic', label: copy.navClinic, icon: Stethoscope },
   ]
-  const viewLabels = { ...Object.fromEntries(navigation.map(({ id, label }) => [id, label])), account: 'Account & profile' }
+  const viewLabels = { ...Object.fromEntries(navigation.map(({ id, label }) => [id, label])), account: copy.account }
   const sidebarName = account?.name || account?.email || 'Guest mode'
   const sidebarRole = account?.role === 'admin' ? 'Platform administrator' : account?.role === 'clinic' ? 'Clinic account' : account?.role === 'patient' ? 'Patient account' : 'Browsing without sign in'
   const avatarInitials = account?.name
@@ -307,7 +369,7 @@ function App() {
           <span className="brand-mark"><HeartPulse size={21} strokeWidth={2.4} /></span>
           <span>clinic<span className="brand-light">connect</span><span className="brand-ai"> AI</span></span>
         </a>
-        <div className="side-caption">YOUR CARE, CONNECTED</div>
+        <div className="side-caption">{copy.sidebarCaption}</div>
         <nav className="side-nav" aria-label="Main navigation">
           {navigation.map(({ id, label, icon: Icon }) => (
             <button key={id} className={`nav-item ${activeView === id ? 'active' : ''}`} onClick={() => setActiveView(id)}>
@@ -318,9 +380,9 @@ function App() {
         <div className="sidebar-spacer" />
         <div className="side-help">
           <div className="help-icon"><MessageCircle size={17} /></div>
-          <p>Need a hand?</p>
-          <span>Our team is happy to help you book.</span>
-          <button onClick={() => setToast('Support contact will be added during setup.')}>Get support <ArrowRight size={14} /></button>
+          <p>{copy.needHelp}</p>
+          <span>{copy.helpIntro}</span>
+          <button onClick={() => setShowSupport(true)}>{copy.getSupport} <ArrowRight size={14} /></button>
         </div>
         <div className="profile-mini">
           <div className="avatar">{avatarInitials}</div><div className="profile-copy"><strong>{sidebarName}</strong><span>{sidebarRole}</span></div>
@@ -332,7 +394,7 @@ function App() {
         <header className="topbar">
           <div className="breadcrumb"><strong>{viewLabels[activeView]}</strong></div>
           <div className="top-actions">
-            <button className="language-button" onClick={() => setLanguage((current) => current === 'en' ? 'hi' : current === 'hi' ? 'kn' : 'en')} aria-label="Switch assistant language"><Languages size={16} /> {language === 'en' ? 'English' : language === 'hi' ? 'हिन्दी' : 'ಕನ್ನಡ'} <ChevronDown size={14} /></button>
+            <button className="language-button" onClick={() => setLanguage((current) => current === 'en' ? 'hi' : current === 'hi' ? 'kn' : 'en')} aria-label="Change interface language" title="Change interface language"><Languages size={16} /> {language === 'en' ? 'English' : language === 'hi' ? 'हिन्दी' : 'ಕನ್ನಡ'} <ChevronDown size={14} /></button>
             <button className="top-avatar" aria-label={account ? 'Open account profile' : 'Open guest profile'} title={account?.email || 'Guest account'} onClick={() => setActiveView('account')}>{avatarInitials}</button>
           </div>
         </header>
@@ -341,37 +403,37 @@ function App() {
           <div className="page-content">
             <section className="welcome-row">
               <div>
-                <div className="eyebrow"><span className="eyebrow-line" /> A CALMER WAY TO FIND CARE</div>
-                <h1>{account?.name ? `Good to see you, ${account.name}` : 'Find care near you'} <span className="wave">✦</span></h1>
-                <p className="welcome-sub">Tell us what you need. We’ll help you find a clinic and a time that works.</p>
+                <div className="eyebrow"><span className="eyebrow-line" /> {copy.eyebrow}</div>
+                <h1>{account?.name ? `${language === 'hi' ? 'नमस्कार' : language === 'kn' ? 'ನಮಸ್ಕಾರ' : 'Good to see you'}, ${account.name}` : copy.title} <span className="wave">✦</span></h1>
+                <p className="welcome-sub">{copy.welcome}</p>
               </div>
                 <div className="care-note"><ShieldCheck size={17} /><span>{directorySource === 'osm' ? 'Live public directory' : directorySource === 'partners' ? 'Approved ClinicConnect partners' : 'Sample directory'}</span></div>
             </section>
 
             <section className="search-panel" aria-label="Clinic search">
-              <label className="search-input-wrap"><Search size={19} /><input value={query} maxLength={100} onChange={(event) => setQuery(event.target.value)} placeholder={directorySource === 'osm' ? 'Clinic name (optional)' : 'Search a clinic, service, or concern'} /></label>
+              <label className="search-input-wrap"><Search size={19} /><input value={query} maxLength={100} onChange={(event) => setQuery(event.target.value)} placeholder={directorySource === 'osm' ? copy.clinicName : copy.searchPlaceholder} /></label>
               <span className="search-divider" />
-              <label className="search-select"><MapPin size={18} /><input list="clinicconnect-areas" value={area} onChange={(event) => setArea(event.target.value)} aria-label="Area" placeholder="Type an area" /><datalist id="clinicconnect-areas"><option value="Delhi NCR" /><option value="Greater Noida" /><option value="Noida" /><option value="Ghaziabad" /><option value="Delhi" /><option value="Gurugram" /><option value="Faridabad" /><option value="Indiranagar" /><option value="Koramangala" /><option value="Whitefield" /><option value="Any area" /></datalist><ChevronDown size={14} /></label>
-              <button className="search-submit" onClick={() => directorySource === 'osm' ? setLiveSearch({ query, area, service, requestedAt: Date.now() }) : setRefreshKey((value) => value + 1)}>Search clinics <ArrowRight size={16} /></button>
+              <label className="search-select"><MapPin size={18} /><input list="clinicconnect-areas" value={area} onChange={(event) => setArea(event.target.value)} aria-label={copy.area} placeholder={copy.area} /><datalist id="clinicconnect-areas"><option value="Delhi NCR" /><option value="Greater Noida" /><option value="Noida" /><option value="Ghaziabad" /><option value="Delhi" /><option value="Gurugram" /><option value="Faridabad" /><option value="Indiranagar" /><option value="Koramangala" /><option value="Whitefield" /><option value="Any area" /></datalist><ChevronDown size={14} /></label>
+              <button className="search-submit" onClick={() => directorySource === 'osm' ? setLiveSearch({ query, area, service, requestedAt: Date.now() }) : setRefreshKey((value) => value + 1)}>{copy.search} <ArrowRight size={16} /></button>
             </section>
             <p className="search-guidance">{directorySource === 'osm'
-              ? 'Search public map listings by area and service; a clinic name is optional. These listings do not include bookable slots.'
+              ? copy.osmGuidance
               : directorySource === 'partners'
-                ? 'Search clinics registered and approved on ClinicConnect. Their published availability can be requested for booking.'
-                : 'Search sample clinics and sample appointment slots for the prototype. Sample bookings do not contact a real clinic.'}</p>
+                ? copy.partnersGuidance
+                : copy.demoGuidance}</p>
 
             <div className="content-grid">
               <section className="results-column">
                 <div className="section-head">
-                  <div><h2>{area && area !== 'Any area' ? `Clinics near ${area}` : 'Clinics in the directory'}</h2><p>{directorySource === 'osm' ? 'OpenStreetMap listings · contact clinics to confirm details and appointments' : directorySource === 'partners' ? 'Approved clinics · times entered by clinic operators' : 'Sample profiles · availability shown for your selected day'}</p></div>
-                  <label className="service-filter"><span className="sr-only">Filter by service</span><select value={service} onChange={(event) => setService(event.target.value)}><option>All services</option><option>Dentistry</option><option>ENT</option><option>Dermatology</option><option>General medicine</option><option>Clinic</option></select><ChevronDown size={14} /></label>
+                  <div><h2>{area && area !== 'Any area' ? `${copy.clinicsNear} ${area}` : copy.clinicsDirectory}</h2><p>{directorySource === 'osm' ? copy.osmSub : directorySource === 'partners' ? copy.partnersSub : copy.demoSub}</p></div>
+                  <label className="service-filter"><span className="sr-only">{copy.filterService}</span><select value={service} onChange={(event) => setService(event.target.value)}><option>All services</option><option>Dentistry</option><option>ENT</option><option>Dermatology</option><option>General medicine</option><option>Clinic</option></select><ChevronDown size={14} /></label>
                 </div>
                 <div className="directory-toolbar">
-                  <label>Directory <select value={directorySource} onChange={(event) => { setDirectorySource(event.target.value); setClinics([]); setDirectoryError(''); setLiveSearch(null) }}><option value="osm">Live OpenStreetMap data</option><option value="partners">Approved ClinicConnect partners</option><option value="demo">Sample prototype data</option></select></label>
-                  <span>{savedClinics.size} saved</span>
+                  <label>{copy.directory} <select value={directorySource} onChange={(event) => { setDirectorySource(event.target.value); setClinics([]); setDirectoryError(''); setLiveSearch(null) }}><option value="osm">Live OpenStreetMap data</option><option value="partners">Approved ClinicConnect partners</option><option value="demo">Sample prototype data</option></select></label>
+                  <span>{savedClinics.size} {copy.saved}</span>
                 </div>
                 {directorySource === 'osm' && <section className="map-panel" aria-label="OpenStreetMap clinic map">
-                  <div className="map-heading"><div><strong>Clinic map</strong><span>{clinics.length ? `${clinics.length} public listing${clinics.length === 1 ? '' : 's'} shown` : liveSearch ? 'No matching map pins for this search' : `Map centered on ${!area || area === 'Any area' ? 'Delhi NCR' : area}`}</span></div><MapPin size={17} /></div>
+                  <div className="map-heading"><div><strong>{copy.map}</strong><span>{clinics.length ? `${clinics.length} ${copy.publicListings}` : liveSearch ? copy.noPins : `${copy.mapCentered} ${!area || area === 'Any area' ? 'Delhi NCR' : area}`}</span></div><MapPin size={17} /></div>
                   <ClinicMap clinics={clinics} area={area} searched={Boolean(liveSearch)} />
                 </section>}
                 {directoryError && <div className="directory-alert" role="status">{directoryError}</div>}
@@ -403,17 +465,17 @@ function App() {
                   event.currentTarget.style.setProperty('--tilt-x', '0deg')
                   event.currentTarget.style.setProperty('--tilt-y', '0deg')
                 }}>
-                  <div className="assistant-head"><div className="assistant-icon"><Sparkles size={19} /></div><div><h2>Booking assistant</h2><span><i /> Ready to help</span></div><button className="more-button" aria-label="Assistant options">•••</button></div>
+                  <div className="assistant-head"><div className="assistant-icon"><Sparkles size={19} /></div><div><h2>{copy.assistant}</h2><span><i /> {copy.ready}</span></div><button className="more-button" aria-label="Assistant options">•••</button></div>
                   <div className="assistant-rule" />
-                  <div className="bot-message"><div className="bot-avatar"><Sparkles size={14} /></div><div><span className="message-time">JUST NOW</span><p>Hi Sakshi! Tell me what you’re looking for in your own words. You can describe a concern, service, or preferred time.</p></div></div>
+                  <div className="bot-message"><div className="bot-avatar"><Sparkles size={14} /></div><div><span className="message-time">{language === 'hi' ? 'अभी' : language === 'kn' ? 'ಈಗಷ್ಟೇ' : 'JUST NOW'}</span><p>{copy.assistantIntro}</p></div></div>
                   {assistantResult && <div className="assistant-response"><span className="response-label">{assistantResult.source === 'demo-rules' ? 'BOOKING SUGGESTION' : 'ASSISTANT'}</span><p>{assistantResult.message}</p>{assistantResult.missing?.length > 0 && <small className="assistant-followup">{assistantFollowUp(assistantResult.missing, language)}</small>}{assistantResult.suggestedService && <div className="suggested-service"><Stethoscope size={15} /><span>{language === 'hi' ? 'सुझाई गई सेवा' : language === 'kn' ? 'ಸೂಚಿಸಿದ ಸೇವೆ' : 'Suggested service'}</span><strong>{assistantResult.suggestedService}</strong><small className="search-applied-note">{directorySource === 'osm' ? 'Public map listings are filtered below. These are not bookable through ClinicConnect.' : directorySource === 'partners' ? 'Approved clinic results are filtered below.' : 'Sample clinic results are filtered below.'}</small></div>}</div>}
-                  <div className="prompt-label">TRY ASKING</div>
+                  <div className="prompt-label">{copy.tryAsking}</div>
                   <div className="quick-prompts">{quickPrompts.map((prompt) => <button key={prompt} onClick={() => askAssistant(prompt)}>{prompt}<ArrowUpRight size={13} /></button>)}</div>
-                  <div className="assistant-compose"><textarea value={assistantText} onChange={(event) => setAssistantText(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); askAssistant() } }} placeholder={language === 'kn' ? 'ನಿಮಗೆ ಏನು ಬೇಕು ಎಂದು ಹೇಳಿ…' : language === 'hi' ? 'आप क्या खोज रहे हैं, बताइए…' : 'Describe what you’re looking for…'} rows={2} aria-label="Describe what you need" /><div className="compose-actions"><span><AudioLines size={15} /> {isListening ? 'Listening…' : `Voice input · ${language === 'en' ? 'English' : language === 'hi' ? 'हिन्दी' : 'ಕನ್ನಡ'}`}</span><button className="voice-button" onClick={listenForRequest} disabled={isListening} aria-label="Speak your request"><Mic size={16} /></button><button disabled={isThinking || !assistantText.trim()} onClick={() => askAssistant()} aria-label="Send message">{isThinking ? <span className="spinner" /> : <ArrowRight size={17} />}</button></div></div>
+                  <div className="assistant-compose"><textarea value={assistantText} onChange={(event) => setAssistantText(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); askAssistant() } }} placeholder={copy.compose} rows={2} aria-label={copy.describeNeed} /><div className="compose-actions"><span><AudioLines size={15} /> {isListening ? copy.listening : `${copy.voice} · ${language === 'en' ? 'English' : language === 'hi' ? 'हिन्दी' : 'ಕನ್ನಡ'}`}</span><button className="voice-button" onClick={listenForRequest} disabled={isListening} aria-label={copy.speak}><Mic size={16} /></button><button disabled={isThinking || !assistantText.trim()} onClick={() => askAssistant()} aria-label={copy.send}>{isThinking ? <span className="spinner" /> : <ArrowRight size={17} />}</button></div></div>
                   <div className="assistant-disclaimer">{aiEnabled && aiConsent ? 'AI matching is on. Your text transcript is sent to OpenAI for request matching; it is not used to diagnose or provide treatment advice.' : 'Basic English/Hindi/Kannada matching runs on this app. No AI provider receives your request unless you opt in below.'} Nearby search uses the area field; this prototype does not read your device location. Voice audio is handled by your browser speech service; this app receives the resulting text.</div>
                   {aiEnabled && <label className="ai-consent"><input type="checkbox" checked={aiConsent} onChange={(event) => setAiConsent(event.target.checked)} /> Use AI matching (sends this text request to OpenAI)</label>}
                 </div>
-                <div className="whatsapp-card"><div className="whatsapp-badge"><MessageCircle size={18} /></div><div><strong>Prefer to talk?</strong><span>WhatsApp voice booking is on our roadmap.</span></div><ArrowRight size={16} /></div>
+                <div className="whatsapp-card"><div className="whatsapp-badge"><MessageCircle size={18} /></div><div><strong>{copy.whatsappTitle}</strong><span>{copy.whatsappText}</span></div><ArrowRight size={16} /></div>
               </aside>
             </div>
           </div>
@@ -424,8 +486,33 @@ function App() {
         {activeView === 'account' && <AccountPage account={account} setAccount={setAccount} onBrowse={() => setActiveView('discover')} onAppointments={() => setActiveView('appointments')} onClinicPortal={() => setActiveView('clinic')} />}
       </main>
 
+      {showSupport && <SupportModal copy={copy} onClose={() => setShowSupport(false)} />}
       {bookingClinic && <BookingModal clinic={bookingClinic} slot={bookingSlot} day={selectedDay} service={bookingService} setService={setBookingService} name={patientName} phone={patientPhone} setName={setPatientName} setPhone={setPatientPhone} state={bookingState} error={bookingError} account={account} setAccount={setAccount} onPatientName={setPatientName} onSubmit={submitBooking} onClose={() => { setBookingClinic(null); setBookingState('idle'); setBookingError('') }} onRetry={() => { setBookingState('idle'); setBookingError('') }} />}
       {toast && <div className="toast" role="status"><Check size={16} />{toast}<button onClick={() => setToast('')} aria-label="Dismiss notification"><X size={15} /></button></div>}
+    </div>
+  )
+}
+
+function SupportModal({ copy, onClose }) {
+  useEffect(() => {
+    function closeOnEscape(event) { if (event.key === 'Escape') onClose() }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [onClose])
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
+      <section className="booking-modal support-modal" role="dialog" aria-modal="true" aria-labelledby="support-title">
+        <div className="modal-top"><span className="modal-kicker"><MessageCircle size={14} /> CLINICCONNECT</span><button className="close-modal" onClick={onClose} aria-label={copy.supportClose}><X size={17} /></button></div>
+        <h2 id="support-title">{copy.supportTitle}</h2>
+        <p className="modal-intro">{copy.supportIntro}</p>
+        <div className="support-topics">
+          <article><strong>{copy.helpSearchTitle}</strong><p>{copy.helpSearch}</p></article>
+          <article><strong>{copy.helpAssistantTitle}</strong><p>{copy.helpAssistant}</p></article>
+          <article><strong>{copy.helpClinicTitle}</strong><p>{copy.helpClinic}</p></article>
+        </div>
+        <p className="support-contact-note">{copy.supportUnavailable}</p>
+      </section>
     </div>
   )
 }
