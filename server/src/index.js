@@ -656,7 +656,7 @@ async function start() {
   if (process.env.NODE_ENV === 'production' && !demoMode && (!process.env.AUTH_SECRET || !process.env.MONGODB_URI || !process.env.ADMIN_EMAIL || !process.env.ADMIN_PASSWORD)) {
     throw new Error('Production requires AUTH_SECRET, MONGODB_URI, ADMIN_EMAIL, and ADMIN_PASSWORD.')
   }
-  if (process.env.MONGODB_URI) {
+  if (process.env.MONGODB_URI && !demoMode) {
     try {
       client = new MongoClient(process.env.MONGODB_URI)
       await client.connect()
@@ -677,6 +677,8 @@ async function start() {
       if (process.env.NODE_ENV === 'production' && !demoMode) throw error
       console.warn(`MongoDB unavailable; using temporary in-memory demo data: ${error.message}`)
     }
+  } else if (process.env.MONGODB_URI && demoMode) {
+    console.warn('CLINICCONNECT_DEMO_MODE is enabled. MongoDB is intentionally not connected; data will be temporary.')
   } else {
     console.warn('MONGODB_URI is not configured. Starting with temporary in-memory demo data.')
   }
