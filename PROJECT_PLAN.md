@@ -1,8 +1,12 @@
 # ClinicConnect AI — End-to-End Implementation Plan
 
-## Implementation status — 5 November 2026
+## Implementation status — 14 November 2026
 
-Optional OpenAI intent matching is now implemented through the Responses API with structured output. The user explicitly opts in before their text/transcribed request is sent. The model suggests only a supported service or area; it does not see availability or make bookings. Without an API key or opt-in, the rules-based demo matcher remains active.
+Production credentials for MongoDB are configured in Vercel, but the Atlas TLS handshake currently fails from both local Node and the Vercel function runtime. Production remains deliberately in `demo-memory` mode so clinic and booking API calls remain available; this mode is not persistent. The UI now displays a warning based on `/api/health` whenever storage is temporary. The immediate blocker is Atlas network/TLS connectivity, which must be corrected and then verified before enabling database mode.
+
+Optional OpenAI matching is implemented in code but currently disabled in the live deployment because `OPENAI_API_KEY` is not configured there. Keep it disabled until the key and the patient opt-in flow are reviewed.
+
+Optional OpenAI intent matching is implemented through the Responses API with structured output. The user explicitly opts in before their text/transcribed request is sent. The model suggests only a supported service or area; it does not see availability or make bookings. Without an API key or opt-in, the rules-based demo matcher remains active.
 
 The rules fallback now recognizes common acne/pimple requests in English and Hindi and can suggest Dermatology in either response language. The directory accepts a typed area (including an onboarded clinic's area) and makes the area/service/date filters visible when no clinics match. “Near me” uses the selected area; device geolocation is not connected.
 
@@ -27,11 +31,11 @@ The rules fallback now recognizes common acne/pimple requests in English and Hin
 
 ### Inputs needed from the project owner
 
-1. A MongoDB Atlas replica-set connection string stored locally in `server/.env` (never send it in chat or commit it).
-2. The preferred admin email and a strong admin password, plus a random `AUTH_SECRET`, also stored only in `server/.env`.
+1. Resolve the Atlas TLS/network-access problem for the already configured MongoDB connection. Verify `/api/health` reports `mongodb` before enabling persistent production booking.
+2. If hosted AI matching is wanted for the demo, add an OpenAI API key to the production environment and keep the existing patient opt-in enabled.
 3. One or more clinics that have agreed to participate, with a contact person who can verify their name, address, services, weekly schedule and booking policy.
 4. A decision on the first pilot area and whether clinics confirm every request or accept bookings immediately.
-5. For WhatsApp later: Meta Business ownership, a phone number, webhook domain and consent-approved message text. For production AI later: selected provider/API key and approval to send only the minimum required text.
+5. For WhatsApp later: Meta Business ownership, a phone number, webhook domain and consent-approved message text.
 
 ## Project objective
 

@@ -31,6 +31,7 @@ const uiCopy = {
     helpAssistantTitle: 'Use the assistant', helpAssistant: 'Describe a concern or service in English, Hindi, or Kannada. The assistant can suggest a clinic service, but it does not diagnose or recommend treatment.',
     helpClinicTitle: 'Clinic registration', helpClinic: 'Clinics can apply through the Clinic portal. A platform administrator must approve a clinic before it appears as a partner.',
     supportUnavailable: 'Direct support contact details have not been configured in this prototype.',
+    temporaryStorage: 'Demo storage is active. Accounts, clinic applications, and bookings may reset; do not enter real patient information.',
   },
   hi: {
     navDiscover: 'क्लिनिक खोजें', navAppointments: 'मेरी अपॉइंटमेंट', navClinic: 'क्लिनिक पोर्टल', account: 'खाता और प्रोफ़ाइल',
@@ -51,6 +52,7 @@ const uiCopy = {
     helpAssistantTitle: 'सहायक का उपयोग करें', helpAssistant: 'समस्या या सेवा अंग्रेज़ी, हिंदी या कन्नड़ में बताइए। सहायक सेवा सुझा सकता है, लेकिन बीमारी का निदान या इलाज नहीं बताता।',
     helpClinicTitle: 'क्लिनिक पंजीकरण', helpClinic: 'क्लिनिक पोर्टल से आवेदन करें। पार्टनर के रूप में दिखने से पहले प्लेटफ़ॉर्म एडमिन की मंज़ूरी ज़रूरी है।',
     supportUnavailable: 'इस प्रोटोटाइप में सीधे सहायता संपर्क की जानकारी अभी उपलब्ध नहीं है।',
+    temporaryStorage: 'डेमो स्टोरेज चालू है। खाते, क्लिनिक आवेदन और बुकिंग रीसेट हो सकते हैं; वास्तविक मरीजों की जानकारी न डालें।',
   },
   kn: {
     navDiscover: 'ಕ್ಲಿನಿಕ್ ಹುಡುಕಿ', navAppointments: 'ನನ್ನ ಅಪಾಯಿಂಟ್‌ಮೆಂಟ್‌ಗಳು', navClinic: 'ಕ್ಲಿನಿಕ್ ಪೋರ್ಟಲ್', account: 'ಖಾತೆ ಮತ್ತು ಪ್ರೊಫೈಲ್',
@@ -71,6 +73,7 @@ const uiCopy = {
     helpAssistantTitle: 'ಸಹಾಯಕ ಬಳಕೆ', helpAssistant: 'ಸಮಸ್ಯೆ ಅಥವಾ ಸೇವೆಯನ್ನು ಇಂಗ್ಲಿಷ್, ಹಿಂದಿ ಅಥವಾ ಕನ್ನಡದಲ್ಲಿ ವಿವರಿಸಿ. ಸಹಾಯಕ ಸೇವೆಯನ್ನು ಸೂಚಿಸಬಹುದು; ರೋಗನಿರ್ಣಯ ಅಥವಾ ಚಿಕಿತ್ಸೆ ನೀಡುವುದಿಲ್ಲ.',
     helpClinicTitle: 'ಕ್ಲಿನಿಕ್ ನೋಂದಣಿ', helpClinic: 'ಕ್ಲಿನಿಕ್ ಪೋರ್ಟಲ್ ಮೂಲಕ ಅರ್ಜಿ ಸಲ್ಲಿಸಿ. ಪಾಲುದಾರರಾಗಿ ಕಾಣಲು ಪ್ಲಾಟ್‌ಫಾರ್ಮ್ ನಿರ್ವಾಹಕರ ಅನುಮೋದನೆ ಅಗತ್ಯ.',
     supportUnavailable: 'ಈ ಮಾದರಿಯಲ್ಲಿ ನೇರ ಸಹಾಯ ಸಂಪರ್ಕದ ವಿವರಗಳನ್ನು ಇನ್ನೂ ಸೇರಿಸಿಲ್ಲ.',
+    temporaryStorage: 'ಡೆಮೊ ಸಂಗ್ರಹಣೆ ಚಾಲನೆಯಲ್ಲಿದೆ. ಖಾತೆಗಳು, ಕ್ಲಿನಿಕ್ ಅರ್ಜಿಗಳು ಮತ್ತು ಬುಕಿಂಗ್‌ಗಳು ಮರುಹೊಂದಬಹುದು; ನೈಜ ರೋಗಿಗಳ ಮಾಹಿತಿಯನ್ನು ನಮೂದಿಸಬೇಡಿ.',
   },
 }
 function assistantFollowUp(missing, language) {
@@ -138,6 +141,7 @@ function App() {
   const [assistantResult, setAssistantResult] = useState(null)
   const [isThinking, setIsThinking] = useState(false)
   const [aiEnabled, setAiEnabled] = useState(false)
+  const [storagePersistent, setStoragePersistent] = useState(null)
   const [aiConsent, setAiConsent] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
   const [bookingClinic, setBookingClinic] = useState(null)
@@ -159,6 +163,7 @@ function App() {
   useEffect(() => {
     fetch('/api/auth/me').then((response) => response.json()).then((data) => setAccount(data.user || null)).catch(() => setAccount(null))
     fetch('/api/assistant/status').then((response) => response.json()).then((data) => setAiEnabled(Boolean(data.aiEnabled))).catch(() => setAiEnabled(false))
+    fetch('/api/health').then((response) => response.json()).then((data) => setStoragePersistent(data.mode === 'mongodb')).catch(() => setStoragePersistent(null))
   }, [])
 
   useEffect(() => {
@@ -398,6 +403,8 @@ function App() {
             <button className="top-avatar" aria-label={account ? 'Open account profile' : 'Open guest profile'} title={account?.email || 'Guest account'} onClick={() => setActiveView('account')}>{avatarInitials}</button>
           </div>
         </header>
+
+        {storagePersistent === false && <div className="storage-notice" role="status"><ShieldCheck size={15} /><span>{copy.temporaryStorage}</span></div>}
 
         {activeView === 'discover' && (
           <div className="page-content">

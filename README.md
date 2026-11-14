@@ -4,6 +4,9 @@ Multi-clinic appointment discovery and booking. This is a student pilot prototyp
 
 ## Current milestone
 
+- The live deployment is currently in `demo-memory` mode. The MongoDB Atlas connection settings are present, but TLS connection attempts fail, so accounts, clinic applications, and appointments can be temporary. The app now warns users when the API reports temporary storage. Do not use real patient information until `/api/health` reports `mongodb` and persistence has been verified.
+- Optional hosted AI matching is currently disabled on the live deployment because no OpenAI API key is configured there. The local rules-based matcher still handles a limited set of common requests.
+
 - React + Vite patient discovery interface.
 - Express API with user-triggered OpenStreetMap/Nominatim clinic searches, an interactive OSM map centered on Delhi NCR, and supported area searches for NCR and Bengaluru.
 - In OSM mode, search by area and service, with an optional clinic name. Results show public listings, map pins and any contact details available in OSM; they do not have booking slots or clinic verification. Bookings are only available with approved ClinicConnect partners.
@@ -36,7 +39,7 @@ npm run dev
 - Web app: <http://localhost:5173>
 - API health: <http://localhost:3001/api/health>
 
-Without a database connection, users, clinic applications and bookings are held in memory and disappear when the API restarts. For local persistence, copy `.env.example` to `server/.env`, add `MONGODB_URI`, `MONGODB_DATABASE`, a long random `AUTH_SECRET`, and `ADMIN_EMAIL` plus `ADMIN_PASSWORD`, then restart the API. Add `OPENAI_API_KEY` to enable optional AI matching. Never commit `.env` or share its values. Sign in to the clinic portal with the configured admin email and password to approve clinic applications. Live OpenStreetMap lookup requires internet access. Searches are user-triggered, cached for one hour and limited to one Nominatim request per second; only the category and area are sent upstream. See the [Nominatim usage policy](https://operations.osmfoundation.org/policies/nominatim/).
+Without a database connection, users, clinic applications and bookings are held in memory and may disappear when the API restarts or runs in another instance. Check `/api/health`; `mode: "mongodb"` indicates the API connected to MongoDB, while `demo-memory` means data is temporary. For local persistence, copy `.env.example` to `server/.env`, add `MONGODB_URI`, `MONGODB_DATABASE`, a long random `AUTH_SECRET`, and `ADMIN_EMAIL` plus `ADMIN_PASSWORD`, then restart the API. Add `OPENAI_API_KEY` to enable optional AI matching. Never commit `.env` or share its values. Sign in to the clinic portal with the configured admin email and password to approve clinic applications. Live OpenStreetMap lookup requires internet access. Searches are user-triggered, cached for one hour and limited to one Nominatim request per second; only the category and area are sent upstream. See the [Nominatim usage policy](https://operations.osmfoundation.org/policies/nominatim/).
 
 ## Useful commands
 
