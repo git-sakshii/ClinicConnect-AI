@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   Activity, ArrowDownLeft, ArrowRight, ArrowUpRight, AudioLines, CalendarDays,
   Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, HeartPulse, Languages,
-  MapPin, MessageCircle, Mic, Plus, Search, ShieldCheck, Sparkles, Stethoscope, UserRound,
+  MapPin, MessageCircle, Mic, Search, ShieldCheck, Sparkles, Stethoscope, UserRound,
   X,
 } from 'lucide-react'
 import { MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet'
@@ -406,14 +406,6 @@ function App() {
                 <div className="eyebrow"><span className="eyebrow-line" /> {copy.eyebrow}</div>
                 <h1>{account?.name ? `${language === 'hi' ? 'नमस्कार' : language === 'kn' ? 'ನಮಸ್ಕಾರ' : 'Good to see you'}, ${account.name}` : copy.title} <span className="wave">✦</span></h1>
                 <p className="welcome-sub">{copy.welcome}</p>
-              </div>
-              <div className="welcome-art" aria-hidden="true">
-                <span className="welcome-orbit orbit-back" />
-                <span className="welcome-orbit orbit-front" />
-                <span className="welcome-sphere"><HeartPulse size={34} strokeWidth={1.7} /></span>
-                <span className="welcome-float float-cross"><Plus size={17} strokeWidth={3} /></span>
-                <span className="welcome-float float-spark">✦</span>
-                <span className="welcome-shadow" />
               </div>
                 <div className="care-note"><ShieldCheck size={17} /><span>{directorySource === 'osm' ? 'Live public directory' : directorySource === 'partners' ? 'Approved ClinicConnect partners' : 'Sample directory'}</span></div>
             </section>
